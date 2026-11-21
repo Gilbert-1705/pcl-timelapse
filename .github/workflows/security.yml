@@ -1,0 +1,91 @@
+name: Security gates
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Secret, dependency and SAST scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # actions/checkout v7.0.1 pinned to a full commit SHA.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gitleaks – scan working tree and Git history
+        id: gitleaks
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/security-reports"
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -v "$RUNNER_TEMP/security-reports:/reports" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact=100 --report-format json --report-path /reports/gitleaks.json \
+            --log-opts=--all /repo
+
+      - name: Trivy – vulnerabilities, misconfiguration and secrets
+        id: trivy
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/security-reports"
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -v "$RUNNER_TEMP/security-reports:/reports" \
+            ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb \
+            fs --scanners vuln,misconfig,secret \
+            --severity HIGH,CRITICAL --format json \
+            --output /reports/trivy.json --exit-code 1 /repo
+
+      - name: Set up Semgrep
+        id: semgrep-install
+        continue-on-error: true
+        run: |
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/python" -m pip install "semgrep==1.186.0"
+
+      - name: Semgrep – static analysis
+        id: semgrep
+        continue-on-error: true
+        run: |
+          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error --quiet --json-output "$RUNNER_TEMP/security-reports/semgrep.json" .
+
+      - name: Enforce security gate
+        if: always()
+        env:
+          GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
+          TRIVY_OUTCOME: ${{ steps.trivy.outcome }}
+          SEMGREP_INSTALL_OUTCOME: ${{ steps.semgrep-install.outcome }}
+          SEMGREP_OUTCOME: ${{ steps.semgrep.outcome }}
+        run: |
+          failed=0
+          for result in \
+            "$GITLEAKS_OUTCOME" \
+            "$TRIVY_OUTCOME" \
+            "$SEMGREP_INSTALL_OUTCOME" \
+            "$SEMGREP_OUTCOME"; do
+            if [ "$result" != "success" ]; then
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Security gate failed or a required scanner could not run."
+            exit 1
+          fi
+
+          echo "All configured security scanners completed successfully."

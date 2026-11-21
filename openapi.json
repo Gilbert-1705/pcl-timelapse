@@ -1,0 +1,37 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "timelapse",
+    "version": "0.1.6",
+    "description": "The routes of the timelapse module. Every path is relative to the mount the host assigns."
+  },
+  "paths": {
+    "/status": {
+      "get": {
+        "operationId": "read-status",
+        "summary": "What the timelapse module is recording",
+        "description": "The printer the camera watches, the storage and folder the videos go to, and, while a print runs, its name, the current layer, the frames kept so far and the last error. Asked with device, it answers this_printer for the tab of that printer. The host takes view_resource on the module's instance before this is called.",
+        "parameters": [
+          {"name": "device", "in": "query", "description": "The printer whose tab asks.", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "The state of the recorder.",
+            "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}}}
+          }
+        }
+      }
+    },
+    "/preview": {
+      "get": {
+        "operationId": "read-preview",
+        "summary": "The newest frame kept for the timelapse",
+        "description": "A JPEG of the frame last chosen for the running or last print, at most 960 pixels wide. 204 when none was chosen yet. The host takes view_resource on the module's instance before this is called.",
+        "responses": {
+          "200": {"description": "The frame.", "content": {"image/jpeg": {"schema": {"type": "string", "format": "binary"}}}},
+          "204": {"description": "No frame was chosen yet."}
+        }
+      }
+    }
+  }
+}

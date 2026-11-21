@@ -1,0 +1,130 @@
+# Timelapse for Prusa Connect Local.
+#
+# One module with both halves: the Go process (main.go), which reads the
+# camera and builds the videos, and the browser bundle in ui/, which adds a
+# "Zeitraffer" tab to the printer page. User-facing texts are German.
+#
+# Install (see README.md):
+#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.1.6 -from <release> -approve
+
+name: timelapse
+title: Zeitraffer
+summary: Nimmt jeden Druck als Zeitraffer auf, ein Bild pro Schicht, ohne zusätzlichen G-Code. Die Schicht kommt aus der Z-Höhe, das Bild mit dem Druckkopf am wenigsten im Weg aus dem Kamerastrom.
+codeowner: Jan Hendrik Adam
+kind: sink
+version: 0.1.6
+license: MIT
+contract_major: 1
+openapi: openapi.json
+platforms:
+  - linux_amd64
+  - linux_arm64
+  - darwin_arm64
+  - darwin_amd64
+
+require:
+  core-device.get: "*"
+  core-device.list: "*"
+  # File name of the print when the start event does not carry it yet.
+  core-device.jobs: "*"
+  core-storage.write: "*"
+
+# observe: Druckerzustand und Ereignisse lesen. write_storage: Videos ablegen.
+permissions:
+  - observe
+  - write_storage
+
+needs:
+  # Einzelbilder der laufenden Schicht und die ausgewählten Bilder bis zum
+  # Druckende liegen hier, nicht im Speicher.
+  data: true
+  # Go-Prozess plus ffmpeg, das den H.264-Strom der Kamera dekodiert.
+  memory_mib: 512
+
+egress:
+  - option: camera_url
+    ports: [554, 80, 443, 8554]
+    from: process
+    why: Liest während eines Drucks den Videostrom der Kamera (RTSP über ffmpeg) oder deren Einzelbild-Adresse.
+    sends: Nur die Anfrage nach dem Videostrom bzw. Bild, mit Benutzername und Passwort, falls gesetzt.
+
+options:
+  - key: camera_url
+    type: url
+    default: ""
+    summary: Adresse der Kamera. rtsp://… für den Videostrom (Buddy3D), http://… für eine Adresse, die ein einzelnes JPEG liefert. Leer nimmt nichts auf.
+  - key: camera_username
+    type: string
+    default: ""
+    summary: Benutzername der Kamera, falls sie einen verlangt.
+  - key: camera_password
+    type: secret
+    default: ""
+    summary: Passwort der Kamera, falls sie eines verlangt.
+  - key: printer
+    type: string
+    default: ""
+    summary: Name oder ID des Druckers, den die Kamera filmt. Leer nimmt den einzigen Drucker bzw. den ersten, der einen Druck startet.
+  - key: storage
+    type: string
+    default: local
+    summary: Speicher, in den die Zeitraffer geschrieben werden.
+  - key: folder
+    type: string
+    default: zeitraffer
+    summary: Ordner im Speicher. Darunter je Drucker ein Ordner und je Druck einer mit zeitraffer.mp4, vorschau.jpg und info.json.
+  - key: capture_fps
+    type: number
+    default: "2"
+    summary: Wie viele Bilder pro Sekunde aus dem Strom gelesen werden, um daraus je Schicht das beste zu wählen.
+  - key: video_fps
+    type: int
+    default: "30"
+    summary: Bilder pro Sekunde im fertigen Video. 300 Schichten ergeben bei 30 also 10 Sekunden.
+  - key: hold_last_s
+    type: number
+    default: "1.5"
+    summary: Wie lange das letzte Bild am Ende des Videos stehen bleibt, in Sekunden.
+  - key: layer_settle
+    type: duration
+    default: 12s
+    summary: Wie lange eine neue Z-Höhe halten muss, bis sie als neue Schicht gilt. Filtert Z-Hops heraus. Muss über dem Telemetrie-Abstand des Druckers (5 s) liegen.
+  - key: min_layers
+    type: int
+    default: "10"
+    summary: Drucke mit weniger Schichten bekommen kein Video.
+  - key: max_frames_per_layer
+    type: int
+    default: "240"
+    summary: Obergrenze an Bildern, die je Schicht zur Auswahl vorgehalten werden. Bei langen Schichten wird ausgedünnt.
+  - key: keep_frames
+    type: bool
+    default: "false"
+    summary: Die ausgewählten Einzelbilder zusätzlich zum Video im Ordner bilder/ ablegen.
+  - key: timezone
+    type: string
+    default: Europe/Berlin
+    summary: Zeitzone für Datum und Uhrzeit im Ordnernamen, etwa Europe/Berlin. Leer nimmt die des Servers (im Container meist UTC).
+  - key: diagnose_layers
+    type: int
+    default: "0"
+    summary: Diagnose. Für so viele Schichten eines Drucks werden alle Kandidatenbilder samt Bewertung und Referenzbild unter diagnose/ neben dem Video abgelegt (960 Pixel breit, etwa 5 bis 10 MB pro Schicht). 0 schaltet die Diagnose aus.
+  - key: diagnose_every
+    type: int
+    default: "20"
+    summary: Diagnose. Jede wievielte Schicht festgehalten wird, ab dieser Schicht. Bei 20 also Schicht 20, 40, 60 und so weiter, bis diagnose_layers erreicht ist.
+  - key: ffmpeg
+    type: string
+    default: ffmpeg
+    summary: Pfad zu ffmpeg auf dem Server.
+
+ui:
+  entry: ui/index.js
+  library: ">=0.0.1 <1.0.0"
+  contributes:
+    device_tab:
+      - id: zeitraffer
+        title: Zeitraffer
+    device_section:
+      - id: zeitraffer
+        title: Zeitraffer

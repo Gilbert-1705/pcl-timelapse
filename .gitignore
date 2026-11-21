@@ -1,0 +1,74 @@
+# Lokale Umgebungsvariablen und Secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.secret
+secrets/
+credentials/
+private/
+certs/
+certificates/
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Logs, Dumps, Backups und lokale Daten
+logs/
+*.log
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+backups/
+backup/
+local-data/
+private-data/
+*.bak
+*.old
+
+# Lokale Tool-/IDE-Dateien
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Security-Reports können sensible Fundstellen enthalten
+security-reports/
+trivy-report.*
+gitleaks-report.*
+semgrep-report.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.npm/
+dist/
+coverage/
+
+# Build-Ausgaben – projektspezifisch prüfen
+build/
+out/
+target/
+
+# Projektspezifisch
+# Quellbaum von Prusa Connect Local (make core)
+.core
+# Release-Ordner und Archive (make release)
+release/
+*.tar.gz
+# Lokales Go-Binary (go build)
+/pcl-timelapse
+/timelapse
