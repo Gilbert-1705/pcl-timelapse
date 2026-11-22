@@ -51,7 +51,7 @@ Frames of the current layer are kept on disk in the module's data folder, not in
 Build a release (see below) and install it:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from release/timelapse -approve
 ```
 
 Or add the release folder to `core.modules_local` in `config.yaml`:
