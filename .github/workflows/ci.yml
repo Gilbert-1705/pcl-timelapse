@@ -1,0 +1,59 @@
+name: CI
+
+# Builds and tests the Go module on every pull request and push to main.
+# The browser bundle is built by release-check.yml (marketplace dry run).
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Go vet, tests and cross-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions/checkout v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-go v7.1.0
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install ffmpeg (used by the tests that encode real video)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends ffmpeg
+          ffmpeg -hide_banner -version | head -n 1
+
+      - name: Fetch the Prusa Connect Local SDK
+        run: |
+          core_commit="$(sed -n 's/^CORE_COMMIT[[:space:]]*?=[[:space:]]*//p' Makefile)"
+          git clone -q --depth 1 --branch "$core_commit" https://github.com/prusa3d/prusa-connect.git .core
+
+      - name: Vet and test
+        run: make test
+
+      - name: Cross-build the platforms from module.yaml
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null .
+            echo "built $target"
+          done
