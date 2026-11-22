@@ -32,9 +32,34 @@ type Settings struct {
 	Timezone       string  `json:"timezone"`
 	DiagnoseLayers int     `json:"diagnose_layers"`
 	DiagnoseEvery  int     `json:"diagnose_every"`
+	Performance    string  `json:"performance"`
+	GcodePark      bool    `json:"gcode_park"`
+	ParkWindow     string  `json:"park_window"`
 
-	settle   time.Duration
-	location *time.Location
+	settle     time.Duration
+	location   *time.Location
+	parkWindow time.Duration
+}
+
+// The performance profiles. "low" is for small computers such as a Raspberry
+// Pi: it decodes only the camera's keyframes, keeps at most one frame a second
+// at 1280 pixels and renders with one thread at a lower priority. The video
+// takes longer and has fewer candidates per layer to choose from.
+const (
+	performanceNormal = "normal"
+	performanceLow    = "low"
+)
+
+// low reports whether the low-resource profile is on.
+func (s Settings) low() bool { return s.Performance == performanceLow }
+
+// captureFPS is how many frames a second are taken from the camera.
+func (s Settings) captureFPS() float64 {
+	if s.low() {
+		return min(s.CaptureFPS, 1)
+	}
+
+	return s.CaptureFPS
 }
 
 var errSettings = errors.New("the timelapse settings are not usable")
@@ -80,6 +105,24 @@ func (s *Settings) check() error {
 
 	if s.DiagnoseEvery < 1 {
 		s.DiagnoseEvery = 20
+	}
+
+	switch s.Performance = strings.ToLower(strings.TrimSpace(s.Performance)); s.Performance {
+	case "":
+		s.Performance = performanceNormal
+	case performanceNormal, performanceLow:
+	default:
+		return fmt.Errorf("%w: performance is %q and has to be normal or low", errSettings, s.Performance)
+	}
+
+	s.parkWindow = 20 * time.Second
+	if w := strings.TrimSpace(s.ParkWindow); w != "" {
+		window, err := time.ParseDuration(w)
+		if err != nil || window < 3*time.Second || window > 2*time.Minute {
+			return fmt.Errorf("%w: park_window is %q and has to be a duration from 3s to 2m", errSettings, s.ParkWindow)
+		}
+
+		s.parkWindow = window
 	}
 
 	if strings.TrimSpace(s.Storage) == "" {

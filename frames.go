@@ -39,11 +39,11 @@ func sourceFor(settings Settings) (frameSource, error) {
 		return nil, fmt.Errorf("camera_url is not an address: %w", err)
 	}
 
-	interval := time.Duration(float64(time.Second) / settings.CaptureFPS)
+	interval := time.Duration(float64(time.Second) / settings.captureFPS())
 
 	switch strings.ToLower(address.Scheme) {
 	case "rtsp", "rtsps":
-		return ffmpegSource{ffmpeg: settings.FFmpeg, url: settings.CameraURL, fps: settings.CaptureFPS}, nil
+		return ffmpegSource{ffmpeg: settings.FFmpeg, url: settings.CameraURL, fps: settings.captureFPS(), low: settings.low()}, nil
 	case "http", "https":
 		return snapshotSource{url: settings.CameraURL, every: interval}, nil
 	default:
@@ -57,19 +57,53 @@ type ffmpegSource struct {
 	ffmpeg string
 	url    string
 	fps    float64
+	low    bool // decode keyframes only, see captureArgs
+}
+
+// lowWidth is how wide frames are in the low-resource profile.
+const lowWidth = 1280
+
+// captureArgs are ffmpeg's arguments for reading the stream. The normal
+// profile decodes every frame and keeps fps of them a second. The low
+// profile decodes only keyframes, which costs a fraction of the CPU, keeps
+// at most fps of those a second without repeating any, and scales them
+// down. How many frames that gives depends on the camera's keyframe
+// interval, typically one every one or two seconds.
+func (s ffmpegSource) captureArgs() []string {
+	rate := strconv.FormatFloat(s.fps, 'f', -1, 64)
+
+	if !s.low {
+		return []string{
+			"-hide_banner", "-loglevel", "error", "-nostdin",
+			"-threads", "2", "-filter_threads", "1",
+			"-rtsp_transport", "tcp",
+			"-i", s.url,
+			"-an",
+			"-vf", "fps=" + rate,
+			"-c:v", "mjpeg", "-q:v", "3",
+			"-f", "image2pipe", "-",
+		}
+	}
+
+	gap := strconv.FormatFloat(1/s.fps, 'f', -1, 64)
+
+	return []string{
+		"-hide_banner", "-loglevel", "error", "-nostdin",
+		"-threads", "1", "-filter_threads", "1",
+		"-rtsp_transport", "tcp",
+		"-skip_frame", "nokey",
+		"-i", s.url,
+		"-an",
+		"-vf", "select='isnan(prev_selected_t)+gte(t-prev_selected_t\\," + gap + ")'," +
+			"scale=trunc(min(" + strconv.Itoa(lowWidth) + "\\,iw)/2)*2:-2",
+		"-fps_mode", "vfr",
+		"-c:v", "mjpeg", "-q:v", "4",
+		"-f", "image2pipe", "-",
+	}
 }
 
 func (s ffmpegSource) run(ctx context.Context, out chan<- frame) error {
-	args := []string{
-		"-hide_banner", "-loglevel", "error", "-nostdin",
-		"-threads", "2", "-filter_threads", "1",
-		"-rtsp_transport", "tcp",
-		"-i", s.url,
-		"-an",
-		"-vf", "fps=" + strconv.FormatFloat(s.fps, 'f', -1, 64),
-		"-c:v", "mjpeg", "-q:v", "3",
-		"-f", "image2pipe", "-",
-	}
+	args := s.captureArgs()
 
 	// ffmpeg comes from the admin-only setting `ffmpeg`, no shell is involved and the
 	// arguments are fixed. Reviewed: no shell, admin-only path.

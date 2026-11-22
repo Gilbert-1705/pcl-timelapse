@@ -56,6 +56,9 @@ type session struct {
 
 	diagnoseLayers int // how many layers of a print keep all their candidates
 	diagnoseEvery  int // every how many layers one is kept
+
+	park       bool          // the slicer parks the head after each layer change
+	parkWindow time.Duration // how long after the start of a layer the park is looked for
 }
 
 func openSession(dir string, m meta, settle time.Duration, maxPerLayer int) (*session, error) {
@@ -145,8 +148,10 @@ func (s *session) add(f frame) error {
 	if len(s.layer) > s.max {
 		kept := s.layer[:0]
 
+		start := s.layer[0].at
+
 		for i, b := range s.layer {
-			if i%2 == 0 {
+			if i%2 == 0 || s.inParkWindow(start, b.at) {
 				kept = append(kept, b)
 			} else {
 				_ = os.Remove(b.file)
@@ -187,6 +192,13 @@ func (s *session) closeLayer(boundary time.Time) (bool, error) {
 	}
 
 	verdict := judge(thumbs, s.history)
+
+	if s.park {
+		if parked := pickParked(closing, s.parkWindow); parked >= 0 {
+			verdict.best = parked
+		}
+	}
+
 	best := verdict.best
 
 	if s.diagnosing() {
@@ -226,14 +238,26 @@ func (s *session) closeLayer(boundary time.Time) (bool, error) {
 // many cores takes the module over its memory_mib and gets it stopped.
 const renderThreads = 2
 
+// renderProfile is how ffmpeg encodes: threads and the widest frame. The low
+// profile encodes with one thread at 1280 pixels and lower priority.
+func renderProfile(settings Settings) (threads, width int) {
+	if settings.low() {
+		return 1, lowWidth
+	}
+
+	return renderThreads, 1920
+}
+
 func (s *session) render(ctx context.Context, settings Settings) (string, error) {
 	if s.meta.Picked == 0 {
 		return "", errors.New("no frame was kept")
 	}
 
 	out := filepath.Join(s.dir, "zeitraffer.mp4")
-	// At most 1920 wide and even on both sides, which yuv420p needs.
-	filters := "scale=trunc(min(1920\\,iw)/2)*2:-2"
+	threads, width := renderProfile(settings)
+
+	// At most width wide and even on both sides, which yuv420p needs.
+	filters := "scale=trunc(min(" + strconv.Itoa(width) + "\\,iw)/2)*2:-2"
 
 	if settings.HoldLastS > 0 {
 		filters += ",tpad=stop_mode=clone:stop_duration=" + strconv.FormatFloat(settings.HoldLastS, 'f', -1, 64)
@@ -251,8 +275,8 @@ func (s *session) render(ctx context.Context, settings Settings) (string, error)
 	// libx264 is in nearly every ffmpeg build. A build without it falls back
 	// to ffmpeg's own choice for MP4, which a browser may not play.
 	attempts := [][]string{
-		{"-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-threads", strconv.Itoa(renderThreads)},
-		{"-threads", strconv.Itoa(renderThreads)},
+		{"-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-threads", strconv.Itoa(threads)},
+		{"-threads", strconv.Itoa(threads)},
 	}
 
 	var lastErr error
@@ -266,7 +290,16 @@ func (s *session) render(ctx context.Context, settings Settings) (string, error)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 
-		if err := cmd.Run(); err != nil {
+		err := cmd.Start()
+		if err == nil {
+			if settings.low() {
+				lowerPriority(cmd.Process.Pid)
+			}
+
+			err = cmd.Wait()
+		}
+
+		if err != nil {
 			lastErr = fmt.Errorf("ffmpeg: %w: %s", err, strings.TrimSpace(stderr.String()))
 
 			continue

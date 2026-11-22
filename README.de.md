@@ -51,7 +51,7 @@ Einzelbilder liegen bis zum Ende einer Schicht im Datenordner des Moduls auf der
 Release bauen (siehe unten) und installieren:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.1.6 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from release/timelapse -approve
 ```
 
 Alternativ das Release-Verzeichnis in `core.modules_local` der `config.yaml` eintragen:
@@ -83,7 +83,23 @@ Berechtigungen: `observe` (Druckerzustand und Ereignisse lesen), `write_storage`
 | `keep_frames` | aus | Die gewählten Einzelbilder zusätzlich unter `bilder/` ablegen. |
 | `timezone` | Europe/Berlin | Zeitzone für Datum und Uhrzeit im Ordnernamen. |
 | `diagnose_layers` / `diagnose_every` | 0 / 20 | Diagnose der Bildwahl, siehe unten. |
+| `performance` | `normal` | `low` für kleine Rechner wie einen Raspberry Pi, siehe unten. |
+| `gcode_park` / `park_window` | aus / `20s` | Das Bild aus einer G-Code-Parkposition nehmen, siehe unten. |
 | `ffmpeg` | `ffmpeg` | Pfad zu ffmpeg. |
+
+## Kleine Rechner (Raspberry Pi)
+
+Stell `performance` auf `low`. Die Erweiterung:
+
+- dekodiert vom Kamerastrom nur die Keyframes (ffmpeg `-skip_frame nokey`) statt jedes Bild. Das spart am meisten CPU.
+- behält höchstens ein Bild pro Sekunde, verkleinert auf 1280 Pixel Breite.
+- baut das Video mit einem Thread, in 1280 Pixeln und mit niedrigerer Prozess-Priorität.
+
+Die Aufnahme braucht weniger CPU und Speicher, das Video am Ende dauert länger, und pro Schicht gibt es weniger Bilder zur Auswahl. Wie viele, hängt vom Keyframe-Abstand der Kamera ab, meist eins alle ein bis zwei Sekunden. Bei RTSP-Kameras wirkt `capture_fps` über 1 in diesem Profil nicht. Die Release-Builds enthalten `linux_arm64`.
+
+## Optional: Druckkopf per G-Code parken
+
+Ab Werk braucht es keinen G-Code. Soll in jeder Schicht ein freies Bild entstehen, lässt du den Slicer den Kopf nach jedem Schichtwechsel ein paar Sekunden aus dem Bild parken und schaltest `gcode_park` ein. Die Erweiterung nimmt dann das Bild, auf dem der Kopf still steht. Das kostet etwa 4 bis 5 Sekunden pro Schicht. Schnipsel und Details stehen in [docs/gcode-park.de.md](docs/gcode-park.de.md).
 
 ## Diagnose der Bildwahl
 
@@ -98,7 +114,7 @@ Das sind etwa 5 bis 10 MB pro Schicht. Die Bilder zeigen den Druckraum. Bevor du
 ## Grenzen
 
 - In den ersten Schichten gibt es noch keine Vergleichsbilder. Dort kann der Druckkopf im Bild bleiben.
-- Steht der Kopf während einer Schicht überwiegend über dem Objekt, kann er in die Referenz geraten und im gewählten Bild sichtbar bleiben. Ohne G-Code lässt sich das nicht vollständig vermeiden. Die Diagnose hilft, das zu untersuchen.
+- Steht der Kopf während einer Schicht überwiegend über dem Objekt, kann er in die Referenz geraten und im gewählten Bild sichtbar bleiben. Ohne G-Code lässt sich das nicht vollständig vermeiden. Das Parken per G-Code vermeidet es, die Diagnose hilft beim Untersuchen.
 - Sehr kurze Schichten (unter `layer_settle`) verschmelzen. Das Video wird kürzer, aber nicht falsch.
 
 ## Selbst bauen

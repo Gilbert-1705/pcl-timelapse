@@ -1,0 +1,71 @@
+name: CodeQL
+
+# Advanced setup instead of GitHub's default setup: the Go module depends on
+# the Prusa Connect Local SDK through a local `replace` (./.core/sdk), so the
+# source tree has to be fetched before CodeQL can build the Go code.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "41 4 * * 3"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+          - language: actions
+            build-mode: none
+
+    steps:
+      # actions/checkout v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-go v7.1.0
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Fetch the Prusa Connect Local SDK
+        if: matrix.language == 'go'
+        run: |
+          core_commit="$(sed -n 's/^CORE_COMMIT[[:space:]]*?=[[:space:]]*//p' Makefile)"
+          git clone -q --depth 1 --branch "$core_commit" https://github.com/prusa3d/prusa-connect.git .core
+
+      # github/codeql-action v4.39.4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Build
+        if: matrix.build-mode == 'manual'
+        run: go build ./...
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea
+        with:
+          category: "/language:${{ matrix.language }}"
