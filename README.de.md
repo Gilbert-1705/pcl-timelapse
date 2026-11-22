@@ -51,7 +51,7 @@ Einzelbilder liegen bis zum Ende einer Schicht im Datenordner des Moduls auf der
 Release bauen (siehe unten) und installieren:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from release/timelapse -approve
 ```
 
 Alternativ das Release-Verzeichnis in `core.modules_local` der `config.yaml` eintragen:

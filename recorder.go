@@ -464,15 +464,18 @@ func jobName(ctx context.Context, conn *wirerpc.Conn, m meta) string {
 	return ""
 }
 
-// fillName replaces the placeholder with the print's file name once the
-// record store knows it. It answers whether the name changed.
+// fillName takes the print's file name from the record store once it knows
+// the job. The store is asked even when the start carried a name: the start
+// of a print can carry the name of the print before it, so the store is asked
+// at the start, on every watchdog tick and before storing. It answers whether
+// the name changed.
 func (s *session) fillName(ctx context.Context, conn *wirerpc.Conn) bool {
-	if s.meta.DisplayName != placeholderName {
+	found := jobName(ctx, conn, s.meta)
+	if found == "" {
 		return false
 	}
 
-	found := jobName(ctx, conn, s.meta)
-	if found == "" {
+	if found == s.meta.DisplayName {
 		return false
 	}
 

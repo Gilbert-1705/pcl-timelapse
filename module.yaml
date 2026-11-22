@@ -5,14 +5,14 @@
 # "Zeitraffer" tab to the printer page. User-facing texts are German.
 #
 # Install (see README.md):
-#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from <release> -approve
+#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from <release> -approve
 
 name: timelapse
 title: Zeitraffer
 summary: Nimmt jeden Druck als Zeitraffer auf, ein Bild pro Schicht, ohne zusätzlichen G-Code. Die Schicht kommt aus der Z-Höhe, das Bild mit dem Druckkopf am wenigsten im Weg aus dem Kamerastrom.
 codeowner: Jan Hendrik Adam
 kind: sink
-version: 0.2.0
+version: 0.2.1
 license: MIT
 contract_major: 1
 openapi: openapi.json

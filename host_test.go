@@ -91,8 +91,8 @@ func (f *fakeFleet) Approve(context.Context, deviceapi.ApproveParams) (deviceapi
 	return deviceapi.Registration{}, errNotHere
 }
 
-// Jobs knows the file of print J1, which its start event leaves out, as a
-// printer that has not yet reported the file does.
+// Jobs knows the file of print J1. Its start event carries the name of the
+// print before it, as a printer that has not yet reported the new file does.
 func (f *fakeFleet) Jobs(_ context.Context, p deviceapi.JobsParams) (deviceapi.Jobs, error) {
 	if p.ID != "P1" {
 		return deviceapi.Jobs{}, errNotHere
@@ -233,7 +233,8 @@ func TestARecordedPrintEndsAsAVideoInTheStorage(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	feed.jobs <- busapi.Window{Events: []json.RawMessage{envelope(t, event.TypeDeviceJobStarted,
-		map[string]any{"job_id": "J1", "device_job_id": "7", "started": time.Now()})}}
+		map[string]any{"job_id": "J1", "device_job_id": "7", "started": time.Now(),
+			"display_name": "Vorheriger_Druck.bgcode"})}}
 
 	z := 0.2
 	for range 6 {
