@@ -8,7 +8,9 @@ An extension for [Prusa Connect Local](https://github.com/prusa3d/prusa-connect)
 - The frame comes from the camera's live stream (RTSP) or from a snapshot URL (HTTP). For every layer the extension keeps the frame in which the print head is least in the way.
 - When the print ends, an H.264 MP4 is stored in Prusa Connect Local's storage. The printer page gets a "Zeitraffer" tab to watch, download and delete the videos.
 
-Status: early version (0.1.x), built and tested against Prusa Connect Local **v0.1.0-beta.1** with a Prusa CORE One and a Buddy3D camera. The user interface is German.
+Status: early version (0.2.x), built and tested against Prusa Connect Local **v0.1.0-beta.1** with a Prusa CORE One and a Buddy3D camera. The user interface is German.
+
+> **Needs ffmpeg on the server.** Prusa Connect Local and its official Docker image do not include ffmpeg. Without it nothing is recorded; the "Zeitraffer" tab then says so. See [ffmpeg on the server](#ffmpeg-on-the-server).
 
 ## How it works
 
@@ -29,8 +31,8 @@ Frames of the current layer are kept on disk in the module's data folder, not in
 ## Requirements
 
 - Prusa Connect Local v0.1.0-beta.1 or newer.
-- `ffmpeg` on the server, with libx264.
-- A camera with an RTSP stream or a URL that returns a single JPEG.
+- `ffmpeg` on the server, with libx264 (see [ffmpeg on the server](#ffmpeg-on-the-server)).
+- A camera with an RTSP stream or a URL that returns a single JPEG, on one of the ports 554, 8554, 322 (RTSP/RTSPS), 80, 8080 or 443 (HTTP/HTTPS). The extension refuses other ports, because it declares exactly these to Prusa Connect.
 - The target storage has to accept `.mp4` and `.json`. Out of the box the filesystem storage only accepts print files, models, firmware and images. Prusa Connect Local's `config.yaml` therefore needs its own list that includes the default list:
 
   ```yaml
@@ -46,12 +48,30 @@ Frames of the current layer are kept on disk in the module's data folder, not in
 
   Without it, the extension only reports "that storage cannot be read right now" when storing. The actual reason (`EXTENSION_NOT_ALLOWED`) is in the server log.
 
+## ffmpeg on the server
+
+ffmpeg decodes the RTSP stream and builds the MP4. It has to be installed where the Prusa Connect Local process runs and be executable by the user that process runs as.
+
+- **Directly on a Linux host:** install the distribution package, for example `sudo apt install ffmpeg` on Debian/Ubuntu or `sudo dnf install ffmpeg` (RPM Fusion) on Fedora. The default setting `ffmpeg` then finds it.
+- **Docker (official image):** the image is Debian trixie-slim without ffmpeg and runs as user `prusa`. Build a small image on top of it and use that instead:
+
+  ```dockerfile
+  FROM <the Prusa Connect Local image you run>
+  USER root
+  RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+  USER prusa
+  ```
+
+- **Elsewhere:** put an ffmpeg build for the server's platform somewhere the process can read, and set the setting `ffmpeg` to its full path.
+
+When the extension starts and before every print it runs `ffmpeg -version`. If that fails, the "Zeitraffer" tab shows a notice with the reason and the print is not recorded. The server log has the same line. Once ffmpeg is there, the next print is recorded without a restart.
+
 ## Installation
 
-Build a release (see below) and install it:
+Once the extension is published on the Prusa Plugin Marketplace, install it under **Settings → Extensions**. Until then, or to try a change, build a release (see below) and install it:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from release/timelapse -approve
 ```
 
 Or add the release folder to `core.modules_local` in `config.yaml`:
@@ -64,13 +84,13 @@ core:
 
 Then enable and configure it under **Settings → Extensions**. After an update, restart the server once, because it loads the browser part only at start.
 
-Permissions: `observe` (read printer state and events), `write_storage` (store the videos), the job record of a printer (`core-device.jobs`, for the file name) and a data folder. Network access only to the camera.
+Permissions: `observe` (read printer state and events), `write_storage` (store the videos), the job record of a printer (`core-device.jobs`, for the file name) and a data folder. Network access only to the camera in `camera_url`, on the ports listed above; a snapshot address that redirects to another host or port is not followed.
 
 ## Settings
 
 | Option | Default | Meaning |
 |---|---|---|
-| `camera_url` | empty | `rtsp://…` for the stream, `http://…` for a snapshot. Empty records nothing. Example: `rtsp://192.0.2.50/live` |
+| `camera_url` | empty | `rtsp://…` for the stream, `http://…` for a snapshot. Ports 554, 8554, 322, 80, 8080 or 443. Empty records nothing. Example: `rtsp://192.0.2.50/live` |
 | `camera_username`, `camera_password` | empty | Camera credentials, if needed. The password is masked in logs. |
 | `printer` | empty | Name or ID of the printer the camera films. Empty takes the only printer, or the first one that starts printing. |
 | `storage` / `folder` | `local` / `zeitraffer` | Where the timelapses are written. |
@@ -85,7 +105,7 @@ Permissions: `observe` (read printer state and events), `write_storage` (store t
 | `diagnose_layers` / `diagnose_every` | 0 / 20 | Diagnosis of the frame choice, see below. |
 | `performance` | `normal` | `low` for small computers such as a Raspberry Pi, see below. |
 | `gcode_park` / `park_window` | off / `20s` | Use the frame from a G-code park, see below. |
-| `ffmpeg` | `ffmpeg` | Path to ffmpeg. |
+| `ffmpeg` | `ffmpeg` | Path to ffmpeg. Not part of Prusa Connect Local, see [ffmpeg on the server](#ffmpeg-on-the-server). |
 
 ## Small computers (Raspberry Pi)
 
@@ -123,10 +143,19 @@ That is about 5 to 10 MB per layer. The frames show your printer enclosure. Befo
 make core      # fetch Prusa Connect Local at the tested tag into .core, build its libraries
 make test      # Go tests, including an end-to-end test over the module protocol (needs ffmpeg)
 make check     # type check of the browser part
+make ui-build  # only the browser bundle into ui/dist (what the marketplace builder runs)
 make release   # release/timelapse/ and release/timelapse-<version>.tar.gz
 ```
 
 Needs Go 1.26, Node 22, pnpm 11 and ffmpeg. `PLATFORMS=linux_amd64 make release` builds a single platform.
+
+## Security notes
+
+What the extension runs, where it connects and what it writes, with the reasons: [docs/security-notes.md](docs/security-notes.md).
+
+## Releases
+
+Releases are built and published by the Prusa Plugin Marketplace builder from a GitHub release tagged `v<version>` (`.github/workflows/release.yml`). Every pull request runs the same builder as a dry run (`.github/workflows/release-check.yml`), which builds and checks everything but uploads nothing. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Security
 

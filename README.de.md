@@ -8,7 +8,9 @@ Eine Erweiterung für [Prusa Connect Local](https://github.com/prusa3d/prusa-con
 - Das Bild kommt aus dem Livebild der Kamera (RTSP) oder von einer Einzelbild-Adresse (HTTP). Pro Schicht wird das Bild gewählt, auf dem der Druckkopf am wenigsten im Weg ist.
 - Am Ende des Drucks entsteht ein H.264-MP4 im Speicher von Prusa Connect Local. Am Drucker gibt es einen Tab „Zeitraffer“ zum Ansehen, Herunterladen und Löschen.
 
-Status: frühe Version (0.1.x), gebaut und getestet gegen Prusa Connect Local **v0.1.0-beta.1** mit einem Prusa CORE One und einer Buddy3D-Kamera. Die Oberfläche ist deutsch.
+Status: frühe Version (0.2.x), gebaut und getestet gegen Prusa Connect Local **v0.1.0-beta.1** mit einem Prusa CORE One und einer Buddy3D-Kamera. Die Oberfläche ist deutsch.
+
+> **Braucht ffmpeg auf dem Server.** Prusa Connect Local und sein offizielles Docker-Image bringen kein ffmpeg mit. Ohne ffmpeg wird nichts aufgenommen, der Tab „Zeitraffer“ sagt das dann. Siehe [ffmpeg auf dem Server](#ffmpeg-auf-dem-server).
 
 ## So funktioniert es
 
@@ -29,8 +31,8 @@ Einzelbilder liegen bis zum Ende einer Schicht im Datenordner des Moduls auf der
 ## Voraussetzungen
 
 - Prusa Connect Local v0.1.0-beta.1 oder neuer.
-- `ffmpeg` auf dem Server, mit libx264.
-- Eine Kamera mit RTSP-Strom oder einer Adresse, die ein einzelnes JPEG liefert.
+- `ffmpeg` auf dem Server, mit libx264 (siehe [ffmpeg auf dem Server](#ffmpeg-auf-dem-server)).
+- Eine Kamera mit RTSP-Strom oder einer Adresse, die ein einzelnes JPEG liefert, auf einem der Ports 554, 8554, 322 (RTSP/RTSPS), 80, 8080 oder 443 (HTTP/HTTPS). Andere Ports lehnt die Erweiterung ab, weil sie genau diese gegenüber Prusa Connect angibt.
 - Der Zielspeicher muss `.mp4` und `.json` annehmen. Der Dateisystem-Speicher erlaubt ab Werk nur Druckdateien, Modelle, Firmware und Bilder. In der `config.yaml` von Prusa Connect Local braucht es deshalb eine eigene Liste, die die Standardliste enthält:
 
   ```yaml
@@ -46,12 +48,30 @@ Einzelbilder liegen bis zum Ende einer Schicht im Datenordner des Moduls auf der
 
   Fehlt das, meldet die Erweiterung beim Speichern nur „that storage cannot be read right now“. Den eigentlichen Grund (`EXTENSION_NOT_ALLOWED`) zeigt das Server-Log.
 
+## ffmpeg auf dem Server
+
+ffmpeg dekodiert den RTSP-Strom und baut das MP4. Es muss dort installiert sein, wo der Prozess von Prusa Connect Local läuft, und für dessen Benutzer ausführbar sein.
+
+- **Direkt auf einem Linux-Rechner:** das Paket der Distribution installieren, zum Beispiel `sudo apt install ffmpeg` unter Debian/Ubuntu oder `sudo dnf install ffmpeg` (RPM Fusion) unter Fedora. Die Standard-Einstellung `ffmpeg` findet es dann.
+- **Docker (offizielles Image):** Das Image ist Debian trixie-slim ohne ffmpeg und läuft als Benutzer `prusa`. Ein kleines Image darauf bauen und stattdessen verwenden:
+
+  ```dockerfile
+  FROM <das Prusa-Connect-Local-Image, das du betreibst>
+  USER root
+  RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+  USER prusa
+  ```
+
+- **Anders:** einen ffmpeg-Build für die Plattform des Servers an einen Ort legen, den der Prozess lesen kann, und die Einstellung `ffmpeg` auf den vollen Pfad setzen.
+
+Beim Start der Erweiterung und vor jedem Druck ruft sie `ffmpeg -version` auf. Klappt das nicht, zeigt der Tab „Zeitraffer“ einen Hinweis mit dem Grund, und der Druck wird nicht aufgenommen. Im Server-Log steht dieselbe Zeile. Sobald ffmpeg da ist, wird der nächste Druck ohne Neustart aufgenommen.
+
 ## Installation
 
-Release bauen (siehe unten) und installieren:
+Sobald die Erweiterung im Prusa Plugin Marketplace veröffentlicht ist, unter **Einstellungen → Erweiterungen** installieren. Bis dahin, oder um eine Änderung zu testen, ein Release bauen (siehe unten) und installieren:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from release/timelapse -approve
 ```
 
 Alternativ das Release-Verzeichnis in `core.modules_local` der `config.yaml` eintragen:
@@ -64,13 +84,13 @@ core:
 
 Danach unter **Einstellungen → Erweiterungen** aktivieren und konfigurieren. Nach einem Update den Server einmal neu starten, weil er den Browser-Teil nur beim Start lädt.
 
-Berechtigungen: `observe` (Druckerzustand und Ereignisse lesen), `write_storage` (Videos ablegen), der Job-Datensatz eines Druckers (`core-device.jobs`, für den Dateinamen) und ein Datenordner. Netzwerkzugriff nur auf die Kamera.
+Berechtigungen: `observe` (Druckerzustand und Ereignisse lesen), `write_storage` (Videos ablegen), der Job-Datensatz eines Druckers (`core-device.jobs`, für den Dateinamen) und ein Datenordner. Netzwerkzugriff nur auf die Kamera in `camera_url`, auf den oben genannten Ports. Leitet eine Einzelbild-Adresse auf einen anderen Host oder Port weiter, folgt die Erweiterung nicht.
 
 ## Einstellungen
 
 | Option | Standard | Bedeutung |
 |---|---|---|
-| `camera_url` | leer | `rtsp://…` für den Videostrom, `http://…` für ein Einzelbild. Leer nimmt nichts auf. Beispiel: `rtsp://192.0.2.50/live` |
+| `camera_url` | leer | `rtsp://…` für den Videostrom, `http://…` für ein Einzelbild. Ports 554, 8554, 322, 80, 8080 oder 443. Leer nimmt nichts auf. Beispiel: `rtsp://192.0.2.50/live` |
 | `camera_username`, `camera_password` | leer | Zugangsdaten der Kamera, falls nötig. Das Passwort wird in Logs ausgeblendet. |
 | `printer` | leer | Name oder ID des Druckers, den die Kamera filmt. Leer nimmt den einzigen Drucker oder den ersten, der druckt. |
 | `storage` / `folder` | `local` / `zeitraffer` | Wohin die Zeitraffer geschrieben werden. |
@@ -85,7 +105,7 @@ Berechtigungen: `observe` (Druckerzustand und Ereignisse lesen), `write_storage`
 | `diagnose_layers` / `diagnose_every` | 0 / 20 | Diagnose der Bildwahl, siehe unten. |
 | `performance` | `normal` | `low` für kleine Rechner wie einen Raspberry Pi, siehe unten. |
 | `gcode_park` / `park_window` | aus / `20s` | Das Bild aus einer G-Code-Parkposition nehmen, siehe unten. |
-| `ffmpeg` | `ffmpeg` | Pfad zu ffmpeg. |
+| `ffmpeg` | `ffmpeg` | Pfad zu ffmpeg. Gehört nicht zu Prusa Connect Local, siehe [ffmpeg auf dem Server](#ffmpeg-auf-dem-server). |
 
 ## Kleine Rechner (Raspberry Pi)
 
@@ -123,10 +143,19 @@ Das sind etwa 5 bis 10 MB pro Schicht. Die Bilder zeigen den Druckraum. Bevor du
 make core      # Prusa Connect Local am getesteten Tag nach .core holen, Bibliotheken bauen
 make test      # Go-Tests, inklusive Ende-zu-Ende-Test über das Modulprotokoll (braucht ffmpeg)
 make check     # Typprüfung des Browser-Teils
+make ui-build  # nur das Seitenbündel nach ui/dist (das baut der Marketplace-Builder)
 make release   # release/timelapse/ und release/timelapse-<version>.tar.gz
 ```
 
 Nötig sind Go 1.26, Node 22, pnpm 11 und ffmpeg. `PLATFORMS=linux_amd64 make release` baut nur eine Plattform.
+
+## Sicherheitshinweise
+
+Was die Erweiterung startet, wohin sie sich verbindet und was sie schreibt, mit Begründung (englisch): [docs/security-notes.md](docs/security-notes.md).
+
+## Releases
+
+Releases baut und veröffentlicht der Builder des Prusa Plugin Marketplace aus einem GitHub-Release mit dem Tag `v<version>` (`.github/workflows/release.yml`). Jeder Pull Request lässt denselben Builder als Probelauf laufen (`.github/workflows/release-check.yml`): Er baut und prüft alles, lädt aber nichts hoch. Änderungen stehen in [CHANGELOG.md](CHANGELOG.md).
 
 ## Sicherheit
 

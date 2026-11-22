@@ -23,7 +23,7 @@ import (
 
 const (
 	name    = "timelapse"
-	release = extension.Version("0.2.1")
+	release = extension.Version("0.2.2")
 )
 
 //go:embed openapi.json

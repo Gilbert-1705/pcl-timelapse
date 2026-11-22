@@ -121,6 +121,14 @@
         </p>
       {/if}
 
+      {#if status.ffmpeg_problem}
+        <p class="text-sm text-warning">
+          ffmpeg fehlt oder startet nicht, deshalb wird nichts aufgenommen. Installiere ffmpeg auf dem
+          Server oder trage unter Einstellungen → Erweiterungen → Zeitraffer bei „ffmpeg“ den vollen Pfad
+          ein. Details: {status.ffmpeg_problem}
+        </p>
+      {/if}
+
       {#if status.last_error}
         <p class="text-sm text-warning">Zuletzt: {status.last_error}</p>
       {/if}

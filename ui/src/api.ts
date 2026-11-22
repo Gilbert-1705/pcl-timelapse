@@ -19,6 +19,10 @@ export interface RecorderStatus {
   rendering?: number;
   last_video?: string;
   last_error?: string;
+  /** Erste Zeile von `ffmpeg -version`. */
+  ffmpeg?: string;
+  /** Warum ffmpeg nicht läuft. Ohne ffmpeg wird nichts aufgenommen. */
+  ffmpeg_problem?: string;
 }
 
 /** Ein fertiger Zeitraffer: ein Ordner im Speicher. */

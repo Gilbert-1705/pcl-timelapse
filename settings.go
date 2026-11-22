@@ -139,12 +139,16 @@ func (s *Settings) check() error {
 		return nil
 	}
 
-	address, err := url.Parse(s.CameraURL)
-	if err != nil || address.Host == "" {
-		return fmt.Errorf("%w: camera_url is not an address", errSettings)
+	if err := checkCameraURL(s.CameraURL); err != nil {
+		return err
 	}
 
 	if s.CameraUsername != "" {
+		address, err := url.Parse(s.CameraURL)
+		if err != nil {
+			return fmt.Errorf("%w: camera_url is not an address", errSettings)
+		}
+
 		address.User = url.UserPassword(s.CameraUsername, s.CameraPassword)
 		s.CameraURL = address.String()
 	}

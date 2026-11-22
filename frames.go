@@ -106,7 +106,7 @@ func (s ffmpegSource) run(ctx context.Context, out chan<- frame) error {
 	args := s.captureArgs()
 
 	// ffmpeg comes from the admin-only setting `ffmpeg`, no shell is involved and the
-	// arguments are fixed. Reviewed: no shell, admin-only path.
+	// arguments are fixed. Why this is safe: docs/security-notes.md.
 	cmd := exec.CommandContext(ctx, s.ffmpeg, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command, go.lang.security.audit.dangerous-exec-command
 	cmd.Stderr = prefixed{prefix: "ffmpeg: ", hide: secretsOf(s.url)}
 	cmd.WaitDelay = 5 * time.Second
@@ -190,7 +190,7 @@ type snapshotSource struct {
 }
 
 func (s snapshotSource) run(ctx context.Context, out chan<- frame) error {
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := cameraClient(10 * time.Second)
 	ticker := time.NewTicker(s.every)
 
 	defer ticker.Stop()
