@@ -63,6 +63,10 @@ type Status struct {
 	Rendering   int       `json:"rendering,omitempty"`
 	LastVideo   string    `json:"last_video,omitempty"`
 	LastError   string    `json:"last_error,omitempty"`
+	// FFmpeg is the first line of `ffmpeg -version`, FFmpegProblem says in
+	// plain words why ffmpeg cannot run. Nothing is recorded without it.
+	FFmpeg        string `json:"ffmpeg,omitempty"`
+	FFmpegProblem string `json:"ffmpeg_problem,omitempty"`
 }
 
 type recorder struct {
@@ -117,8 +121,9 @@ func (r *recorder) start(ctx context.Context, conn *wirerpc.Conn, settings Setti
 			return
 		}
 
-		r.wg.Add(3)
+		r.wg.Add(4)
 
+		go func() { defer r.wg.Done(); r.checkFFmpeg(ctx) }()
 		go func() { defer r.wg.Done(); r.followJobs(ctx) }()
 		go func() { defer r.wg.Done(); r.followTelemetry(ctx) }()
 		go func() { defer r.wg.Done(); r.loop(ctx) }()
@@ -131,6 +136,27 @@ func (r *recorder) setStatus(change func(*Status)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	change(&r.status)
+}
+
+// checkFFmpeg asks whether ffmpeg runs and shows the answer in the status, so
+// a missing ffmpeg shows on the tab before the first print and not as a failed
+// recording afterwards. It answers whether ffmpeg is usable.
+func (r *recorder) checkFFmpeg(ctx context.Context) bool {
+	version, err := checkFFmpeg(ctx, r.settings.FFmpeg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
+	}
+
+	r.setStatus(func(s *Status) {
+		s.FFmpeg = version
+		s.FFmpegProblem = ""
+
+		if err != nil {
+			s.FFmpegProblem = err.Error()
+		}
+	})
+
+	return err == nil
 }
 
 func (r *recorder) fail(format string, args ...any) {
@@ -492,6 +518,14 @@ func (r *recorder) begin(ctx context.Context, s *session) {
 	s.tracker.reset(time.Now(), z, known)
 	r.active = s
 	r.idleSince, r.lastCheck = time.Time{}, time.Now()
+
+	// Without ffmpeg there is nothing to decode the stream or build the video
+	// with. The print is not recorded, and the tab says why.
+	if !r.checkFFmpeg(ctx) {
+		r.fail("not recorded: ffmpeg is missing, see the notice above")
+
+		return
+	}
 
 	source, err := sourceFor(r.settings)
 	if err != nil {

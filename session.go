@@ -284,7 +284,7 @@ func (s *session) render(ctx context.Context, settings Settings) (string, error)
 	for _, codec := range attempts {
 		args := append(append(append([]string{}, base...), codec...), out)
 		// ffmpeg comes from the admin-only setting `ffmpeg`, no shell is involved and the
-		// arguments are fixed. Reviewed: no shell, admin-only path.
+		// arguments are fixed. Why this is safe: docs/security-notes.md.
 		cmd := exec.CommandContext(ctx, settings.FFmpeg, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command, go.lang.security.audit.dangerous-exec-command
 
 		var stderr bytes.Buffer

@@ -218,6 +218,8 @@ func TestARecordedPrintEndsAsAVideoInTheStorage(t *testing.T) {
 	go func() { _ = host.Serve(ctx) }()
 	go func() { _ = module.Serve(ctx) }()
 
+	allowAnyCameraPort(t)
+
 	settings := Settings{
 		CameraURL: camera.URL, Storage: "local", Folder: "zeitraffer",
 		CaptureFPS: 5, VideoFPS: 10, LayerSettle: "2s", MinLayers: 3, MaxPerLayer: 64, FFmpeg: "ffmpeg",
@@ -393,9 +395,13 @@ func TestARecordingEndsWhenThePrinterIsIdleAndNoEndArrives(t *testing.T) {
 	go func() { _ = host.Serve(ctx) }()
 	go func() { _ = module.Serve(ctx) }()
 
+	allowAnyCameraPort(t)
+
 	settings := Settings{CameraURL: camera.URL, Storage: "local", Folder: "zeitraffer", CaptureFPS: 5, VideoFPS: 10,
 		LayerSettle: "2s", MinLayers: 3, MaxPerLayer: 64, FFmpeg: "ffmpeg"}
-	_ = settings.check()
+	if err := settings.check(); err != nil {
+		t.Fatal(err)
+	}
 
 	rec := newRecorder()
 	rec.start(ctx, module, settings, t.TempDir())
@@ -435,4 +441,15 @@ func TestARecordingEndsWhenThePrinterIsIdleAndNoEndArrives(t *testing.T) {
 
 	cancel()
 	rec.wait()
+}
+
+// allowAnyCameraPort lets a test reach its fake camera, which listens on a
+// random local port, and restores the declared ports afterwards.
+func allowAnyCameraPort(t *testing.T) {
+	t.Helper()
+
+	allowed := cameraPortAllowed
+	cameraPortAllowed = func(int) bool { return true }
+
+	t.Cleanup(func() { cameraPortAllowed = allowed })
 }

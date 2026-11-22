@@ -1,0 +1,34 @@
+name: Marketplace dry run
+
+# Runs the marketplace's builder on every pull request to main as a dry run:
+# it builds every platform and the browser bundle, runs the marketplace's
+# checks and signs with a throwaway key, but uploads nothing and uses no
+# secret. A change the marketplace would refuse fails here and not at release.
+#
+# The builder's publish job asks for id-token and attestations even in a dry
+# run, so they are granted here. In a dry run it requests no token and makes
+# no attestation, and the marketplace accepts a release only from release.yml
+# in the environment "release". Pull requests from forks are skipped: they get
+# no id-token.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  dry-run:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    # prusa3d/prusa-connect-marketplace-publish v1.0.2, pinned to its commit.
+    uses: prusa3d/prusa-connect-marketplace-publish/.github/workflows/publish.yml@56dae34cf597f36239b0fefea87d07de0c91d236 # v1.0.2
+    with:
+      path: .
+      bundle-command: make ui-build
+      core-ref: v0.1.0-beta.1
+      dry-run: true
+    permissions:
+      contents: read
+      id-token: write     # required by the builder's publish job; a dry run requests no token
+      attestations: write # required by the builder's publish job; a dry run attests nothing

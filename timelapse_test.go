@@ -3,17 +3,24 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/extension"
+	"github.com/prusa3d/prusa-connect/sdk/manifest"
 )
 
 var t0 = time.Date(2026, 11, 20, 20, 0, 0, 0, time.UTC)
@@ -318,5 +325,106 @@ func TestTheModulePathGivesANamespace(t *testing.T) {
 
 	if _, err := extension.NamespaceOf(module); err != nil {
 		t.Fatalf("module %q: %v", module, err)
+	}
+}
+
+// The ports module.yaml declares for camera_url are the ports the process
+// allows, so the egress an operator approves is what the extension does.
+func TestTheDeclaredCameraPortsAreTheEnforcedOnes(t *testing.T) {
+	text, err := os.ReadFile("module.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	line := regexp.MustCompile(`(?m)^\s*ports:\s*\[([0-9, ]+)\]`).FindSubmatch(text)
+	if line == nil {
+		t.Fatal("module.yaml declares no ports for camera_url")
+	}
+
+	var declared []int
+
+	for _, part := range strings.Split(string(line[1]), ",") {
+		port, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		declared = append(declared, port)
+	}
+
+	if !slices.Equal(declared, cameraPorts) {
+		t.Fatalf("module.yaml declares %v, the process allows %v", declared, cameraPorts)
+	}
+}
+
+// module.yaml requires a core this extension was built against, and that
+// core's own prerelease counts as inside the range.
+func TestTheRequiredCoreRangeTakesTheCoreItIsBuiltFor(t *testing.T) {
+	text, err := os.ReadFile("module.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	line := regexp.MustCompile(`(?m)^\s*core:\s*"([^"]+)"`).FindSubmatch(text)
+	if line == nil {
+		t.Fatal("module.yaml has no require.core")
+	}
+
+	constraint, err := manifest.ParseConstraint(string(line[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	core, err := manifest.ParseRelease("0.1.0-beta.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !constraint.HoldsCore(core) {
+		t.Fatalf("%s refuses core 0.1.0-beta.1", constraint)
+	}
+}
+
+func TestCameraAddressesOutsideTheDeclaredPortsAreRefused(t *testing.T) {
+	for raw, ok := range map[string]bool{
+		"rtsp://192.0.2.50/live":      true,
+		"rtsp://192.0.2.50:8554/live": true,
+		"rtsps://192.0.2.50/live":     true,
+		"http://192.0.2.50/snap.jpg":  true,
+		"http://192.0.2.50:8080/snap": true,
+		"https://192.0.2.50/snap":     true,
+		"rtsp://192.0.2.50:9000/live": false,
+		"http://192.0.2.50:22/":       false,
+		"ftp://192.0.2.50/snap.jpg":   false,
+		"file:///etc/passwd":          false,
+		"rtsp:///live":                false,
+		"not an address":              false,
+	} {
+		err := checkCameraURL(raw)
+		if (err == nil) != ok {
+			t.Errorf("%s: accepted %v, want %v (%v)", raw, err == nil, ok, err)
+		}
+	}
+}
+
+func TestASnapshotRedirectToAnotherHostIsNotFollowed(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("the redirect to another host was followed")
+	}))
+	defer other.Close()
+
+	camera := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/elsewhere", http.StatusFound)
+	}))
+	defer camera.Close()
+
+	resp, err := cameraClient(5 * time.Second).Get(camera.URL + "/snap.jpg")
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("the redirect was not refused")
+	}
+
+	if !errors.Is(err, errRedirect) {
+		t.Fatalf("want errRedirect, got %v", err)
 	}
 }

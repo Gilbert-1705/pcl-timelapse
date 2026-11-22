@@ -2,17 +2,20 @@
 #
 # One module with both halves: the Go process (main.go), which reads the
 # camera and builds the videos, and the browser bundle in ui/, which adds a
-# "Zeitraffer" tab to the printer page. User-facing texts are German.
+# "Zeitraffer" tab to the printer page. Title and summary are English for the
+# marketplace; the tab and the setting descriptions are German.
 #
-# Install (see README.md):
-#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.1 -from <release> -approve
+# Needs ffmpeg on the server (not part of Prusa Connect Local), see README.md.
+#
+# Install from a release folder (see README.md):
+#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from <release> -approve
 
 name: timelapse
-title: Zeitraffer
-summary: Nimmt jeden Druck als Zeitraffer auf, ein Bild pro Schicht, ohne zusätzlichen G-Code. Die Schicht kommt aus der Z-Höhe, das Bild mit dem Druckkopf am wenigsten im Weg aus dem Kamerastrom.
-codeowner: Jan Hendrik Adam
+title: Timelapse
+summary: Records every print as a timelapse video, one frame per layer, without extra G-code. Reads an RTSP or snapshot camera and needs ffmpeg installed on the server.
+codeowner: Gilbert-1705
 kind: sink
-version: 0.2.1
+version: 0.2.2
 license: MIT
 contract_major: 1
 openapi: openapi.json
@@ -23,6 +26,8 @@ platforms:
   - darwin_amd64
 
 require:
+  # Built and tested against Prusa Connect Local 0.1.0-beta.1.
+  core: ">=0.1.0-beta.1"
   core-device.get: "*"
   core-device.list: "*"
   # File name of the print when the start event does not carry it yet.
@@ -41,18 +46,25 @@ needs:
   # Go-Prozess plus ffmpeg, das den H.264-Strom der Kamera dekodiert.
   memory_mib: 512
 
+# The only connection outside Prusa Connect: the camera the operator sets in
+# camera_url. The process enforces this list (camera.go): another port is
+# refused when the settings are read, and a snapshot redirect is followed only
+# to the same scheme, host and port. For rtsp:// and rtsps:// the process
+# starts ffmpeg (setting ffmpeg, no shell, fixed arguments, frames.go) with
+# -rtsp_transport tcp, so ffmpeg opens one TCP connection to that address.
+# Details for reviewers: docs/security-notes.md.
 egress:
   - option: camera_url
-    ports: [554, 80, 443, 8554]
+    ports: [554, 8554, 322, 80, 8080, 443]
     from: process
-    why: Liest während eines Drucks den Videostrom der Kamera (RTSP über ffmpeg) oder deren Einzelbild-Adresse.
-    sends: Nur die Anfrage nach dem Videostrom bzw. Bild, mit Benutzername und Passwort, falls gesetzt.
+    why: Reads the camera while a print runs, an RTSP stream through ffmpeg or a JPEG snapshot address, to pick one frame per layer.
+    sends: The stream or image request to the camera address, with the camera username and password when they are set. No print data.
 
 options:
   - key: camera_url
     type: url
     default: ""
-    summary: Adresse der Kamera. rtsp://… für den Videostrom (Buddy3D), http://… für eine Adresse, die ein einzelnes JPEG liefert. Leer nimmt nichts auf.
+    summary: Adresse der Kamera. rtsp://… für den Videostrom (Buddy3D), http://… für eine Adresse, die ein einzelnes JPEG liefert. Erlaubte Ports 554, 8554, 322, 80, 8080 und 443. Leer nimmt nichts auf.
   - key: camera_username
     type: string
     default: ""
@@ -128,7 +140,7 @@ options:
   - key: ffmpeg
     type: string
     default: ffmpeg
-    summary: Pfad zu ffmpeg auf dem Server.
+    summary: Pfad zu ffmpeg auf dem Server. ffmpeg gehört nicht zu Prusa Connect Local und muss auf dem Server installiert sein (siehe README). Fehlt es, zeigt der Tab Zeitraffer einen Hinweis.
 
 ui:
   entry: ui/index.js
