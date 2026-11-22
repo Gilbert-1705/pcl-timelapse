@@ -411,6 +411,7 @@ func (r *recorder) onJob(ctx context.Context, job jobEvent) {
 	s, err := openSession(filepath.Join(r.dataDir, "sessions", m.JobID), m, r.settings.settle, r.settings.MaxPerLayer)
 	if s != nil {
 		s.setDiagnosis(r.settings.DiagnoseLayers, r.settings.DiagnoseEvery)
+		s.setPark(r.settings.GcodePark, r.settings.parkWindow)
 		s.fillName(ctx, r.conn)
 	}
 	if err != nil {
@@ -704,6 +705,7 @@ func (r *recorder) recover(ctx context.Context) {
 		}
 
 		s.setDiagnosis(r.settings.DiagnoseLayers, r.settings.DiagnoseEvery)
+		s.setPark(r.settings.GcodePark, r.settings.parkWindow)
 
 		if r.active == nil && stillPrinting(ctx, r.conn, m) {
 			fmt.Fprintf(os.Stderr, "%s: carrying on with %q after a restart\n", name, m.DisplayName)

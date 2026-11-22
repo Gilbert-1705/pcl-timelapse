@@ -51,7 +51,7 @@ Frames of the current layer are kept on disk in the module's data folder, not in
 Build a release (see below) and install it:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.1.6 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from release/timelapse -approve
 ```
 
 Or add the release folder to `core.modules_local` in `config.yaml`:
@@ -83,7 +83,23 @@ Permissions: `observe` (read printer state and events), `write_storage` (store t
 | `keep_frames` | off | Also store the chosen frames under `bilder/`. |
 | `timezone` | Europe/Berlin | Time zone for date and time in the folder name. |
 | `diagnose_layers` / `diagnose_every` | 0 / 20 | Diagnosis of the frame choice, see below. |
+| `performance` | `normal` | `low` for small computers such as a Raspberry Pi, see below. |
+| `gcode_park` / `park_window` | off / `20s` | Use the frame from a G-code park, see below. |
 | `ffmpeg` | `ffmpeg` | Path to ffmpeg. |
+
+## Small computers (Raspberry Pi)
+
+Set `performance` to `low`. The extension then:
+
+- decodes only the camera's keyframes (ffmpeg `-skip_frame nokey`) instead of every frame, which is the biggest CPU saving,
+- keeps at most one frame a second, scaled to 1280 pixels wide,
+- builds the video with one thread, at 1280 pixels and with a lower process priority.
+
+Recording takes less CPU and memory, the video at the end takes longer, and every layer has fewer frames to choose from. How many depends on the camera's keyframe interval, typically one every one or two seconds. For RTSP cameras `capture_fps` above 1 has no effect in this profile. Release builds include `linux_arm64`.
+
+## Optional: park the head with G-code
+
+The default needs no G-code. If you want a clean frame in every layer, let the slicer park the head out of the camera's view for a few seconds after each layer change and turn on `gcode_park`. The extension then keeps the frame in which the head stands still. It costs about 4 to 5 seconds per layer. The snippet and the details are in [docs/gcode-park.md](docs/gcode-park.md).
 
 ## Diagnosis of the frame choice
 
@@ -98,7 +114,7 @@ That is about 5 to 10 MB per layer. The frames show your printer enclosure. Befo
 ## Limits
 
 - The first layers have no reference frames yet, so the print head may stay in the picture there.
-- If the head stays over the object for most of a layer, it can end up in the reference and stay visible in the chosen frame. Without G-code this cannot be avoided completely. The diagnosis helps to look into it.
+- If the head stays over the object for most of a layer, it can end up in the reference and stay visible in the chosen frame. Without G-code this cannot be avoided completely. The G-code park avoids it, the diagnosis helps to look into it.
 - Very short layers (shorter than `layer_settle`) merge. The video gets shorter, not wrong.
 
 ## Building

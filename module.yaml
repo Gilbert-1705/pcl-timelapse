@@ -5,14 +5,14 @@
 # "Zeitraffer" tab to the printer page. User-facing texts are German.
 #
 # Install (see README.md):
-#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.1.6 -from <release> -approve
+#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.0 -from <release> -approve
 
 name: timelapse
 title: Zeitraffer
 summary: Nimmt jeden Druck als Zeitraffer auf, ein Bild pro Schicht, ohne zusätzlichen G-Code. Die Schicht kommt aus der Z-Höhe, das Bild mit dem Druckkopf am wenigsten im Weg aus dem Kamerastrom.
 codeowner: Jan Hendrik Adam
 kind: sink
-version: 0.1.6
+version: 0.2.0
 license: MIT
 contract_major: 1
 openapi: openapi.json
@@ -113,6 +113,18 @@ options:
     type: int
     default: "20"
     summary: Diagnose. Jede wievielte Schicht festgehalten wird, ab dieser Schicht. Bei 20 also Schicht 20, 40, 60 und so weiter, bis diagnose_layers erreicht ist.
+  - key: performance
+    type: string
+    default: normal
+    summary: "normal oder low. low ist für kleine Rechner wie einen Raspberry Pi: Vom Kamerastrom werden nur Keyframes dekodiert, höchstens ein Bild pro Sekunde mit 1280 Pixeln, und das Video wird mit einem Thread und niedriger Priorität gebaut. Das spart CPU und Speicher, dauert aber länger und gibt pro Schicht weniger Bilder zur Auswahl."
+  - key: gcode_park
+    type: bool
+    default: "false"
+    summary: Nur einschalten, wenn der Slicer den Druckkopf nach jedem Schichtwechsel kurz aus dem Bild parkt (Anleitung in docs/gcode-park.md). Dann nimmt der Zeitraffer das Bild, auf dem der Kopf still steht, statt es zu schätzen. Ohne Park-G-Code bleibt es aus.
+  - key: park_window
+    type: duration
+    default: 20s
+    summary: Wie lange nach Beginn einer Schicht nach dem geparkten Kopf gesucht wird (3 s bis 2 min). Muss länger sein als Parkbewegung und Wartezeit zusammen.
   - key: ffmpeg
     type: string
     default: ffmpeg
