@@ -127,7 +127,8 @@ func (s ffmpegSource) run(ctx context.Context, out chan<- frame) error {
 	// ffmpeg comes from the admin-only setting `ffmpeg`, no shell is involved and the
 	// arguments are fixed. Why this is safe: docs/security-notes.md.
 	cmd := exec.CommandContext(ctx, s.ffmpeg, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command, go.lang.security.audit.dangerous-exec-command
-	cmd.Stderr = prefixed{prefix: "ffmpeg: ", hide: secretsOf(s.url)}
+	logged := newRedactedLog("ffmpeg: ", s.url)
+	cmd.Stderr = logged
 	cmd.WaitDelay = 5 * time.Second
 
 	stdout, err := cmd.StdoutPipe()
@@ -147,6 +148,8 @@ func (s ffmpegSource) run(ctx context.Context, out chan<- frame) error {
 	})
 
 	waitErr := cmd.Wait()
+	logged.Flush()
+
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -278,36 +281,3 @@ func fetchJPEG(ctx context.Context, client *http.Client, address string) ([]byte
 // prefixed writes another process's error output line by line to ours, where
 // the host puts it into its log. ffmpeg repeats the address it was given in
 // its errors, so the password in it is blanked first.
-type prefixed struct {
-	prefix string
-	hide   []string
-}
-
-func (p prefixed) Write(b []byte) (int, error) {
-	text := string(b)
-	for _, secret := range p.hide {
-		text = strings.ReplaceAll(text, secret, "xxxxx")
-	}
-
-	for line := range strings.SplitSeq(strings.TrimRight(text, "\n"), "\n") {
-		if line != "" {
-			fmt.Fprintf(os.Stderr, "timelapse: %s%s\n", p.prefix, line)
-		}
-	}
-
-	return len(b), nil
-}
-
-// secretsOf answers the parts of an address that must not reach a log.
-func secretsOf(address string) []string {
-	parsed, err := url.Parse(address)
-	if err != nil || parsed.User == nil {
-		return nil
-	}
-
-	if password, set := parsed.User.Password(); set && password != "" {
-		return []string{password, url.QueryEscape(password)}
-	}
-
-	return nil
-}

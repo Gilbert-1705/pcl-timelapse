@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"image"
-	"image/jpeg"
 )
 
 // Thumbnails are small greyscale copies of each frame. They are what the
@@ -16,7 +14,7 @@ const (
 // thumbnail decodes a JPEG and scales it to a thumbWidth×thumbHeight greyscale
 // image by averaging the source pixels that fall into each cell.
 func thumbnail(frame []byte) ([]uint8, error) {
-	img, err := jpeg.Decode(bytes.NewReader(frame))
+	img, err := decodeJPEG(frame)
 	if err != nil {
 		return nil, err
 	}

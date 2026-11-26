@@ -50,9 +50,8 @@ jobs:
 
       - name: Fetch the Prusa Connect Local SDK
         if: matrix.language == 'go'
-        run: |
-          core_commit="$(sed -n 's/^CORE_COMMIT[[:space:]]*?=[[:space:]]*//p' Makefile)"
-          git clone -q --depth 1 --branch "$core_commit" https://github.com/prusa3d/prusa-connect.git .core
+        # Clones CORE_COMMIT and refuses it unless it is the commit in CORE_SHA.
+        run: make core-sdk
 
       # github/codeql-action v4.39.4
       - name: Initialize CodeQL

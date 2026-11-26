@@ -69,14 +69,28 @@ Why this is not a command injection path:
   extension; the stream reader has a `WaitDelay`, the version check a 10 s
   timeout. Rendering uses at most two threads (one in the `low` profile) and,
   in that profile, a lower process priority.
-- **Logs without secrets:** ffmpeg's stderr goes to the host log with the
-  camera password replaced by `xxxxx` (`prefixed`, `secretsOf`).
+- **Logs without secrets:** ffmpeg's stderr goes to the host log line by
+  line (`redact.go`). Every `scheme://userinfo@` in a line becomes
+  `scheme://xxxxx@`, and every spelling of the camera password (plain, path,
+  query and userinfo escaping, as ffmpeg quotes it) becomes `xxxxx`. A line
+  split across two writes is held back until it is complete. A table test
+  covers passwords with spaces, `!`, `#`, `%`, `@`, `:`, `/` and umlauts, and
+  a second test runs ffmpeg itself against an unreachable address.
+- **Camera pictures are bounded:** before a frame or the preview is
+  decoded, its JPEG header is read and anything over 4096 × 4096 pixels is
+  dropped (`limits.go`), so a camera cannot claim dimensions that take more
+  memory than `needs.memory_mib`.
+- **Folder names:** a print's job id names its folder in the data folder
+  only if it is a plain id (letters, digits, `-`, `_`, at most 64
+  characters); otherwise the print is not recorded.
 
 Known limit: ffmpeg accepts RTSP credentials only inside the address, so the
 camera password is part of ffmpeg's command line while the stream is open.
-Other processes of the same user on the same host (in Docker: in the same
-container) can read it there. Use a camera account that can only view the
-stream.
+Prusa Connect Local starts every extension as a child process of the same
+user in the same container (or host), so every other extension and every
+other process there can read it, for example in `/proc/<pid>/cmdline`. Use a
+camera account that can only view the stream, and install only extensions
+you trust with that.
 
 ## Data the extension writes
 

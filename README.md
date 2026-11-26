@@ -91,7 +91,7 @@ Permissions: `observe` (read printer state and events), `write_storage` (store t
 | Option | Default | Meaning |
 |---|---|---|
 | `camera_url` | empty | `rtsp://…` for the stream, `http://…` for a snapshot. Ports 554, 8554, 322, 80, 8080 or 443. Empty records nothing. Example: `rtsp://192.0.2.50/live` |
-| `camera_username`, `camera_password` | empty | Camera credentials, if needed. The password is masked in logs. |
+| `camera_username`, `camera_password` | empty | Camera credentials, if needed. Both are hidden in the log. Use an account that can only view the stream: other extensions on the same server can read them while a print is recorded (see security notes). |
 | `printer` | empty | Name or ID of the printer the camera films. Empty takes the only printer, or the first one that starts printing. |
 | `storage` / `folder` | `local` / `zeitraffer` | Where the timelapses are written. |
 | `capture_fps` | 2 | Frames per second taken from the stream to choose from per layer. |

@@ -322,7 +322,7 @@ func scaledJPEG(picture []byte, width int) []byte {
 		return nil
 	}
 
-	img, err := jpeg.Decode(bytes.NewReader(picture))
+	img, err := decodeJPEG(picture)
 	if err != nil {
 		return nil
 	}

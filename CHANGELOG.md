@@ -29,6 +29,13 @@ follow [Semantic Versioning](https://semver.org/).
   an answer from the camera cannot make it open a file, an HTTP address or any
   other protocol. ffmpeg still follows an RTSP redirect of the camera itself;
   see `docs/security-notes.md`.
+- ffmpeg's messages in the server log no longer show the camera username or
+  password in any spelling. Before, a password with special characters such
+  as a space or `!` could appear URL-encoded when the camera was unreachable.
+- Camera pictures larger than 4096 × 4096 pixels are dropped before they are
+  decoded, so a faulty camera cannot push the extension over its memory limit.
+- A print is only recorded when its job id is a plain id, because the id names
+  a folder in the extension's data folder.
 
 ## 0.2.2 - 2026-11-22
 

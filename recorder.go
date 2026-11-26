@@ -202,6 +202,13 @@ func (r *recorder) followJobs(ctx context.Context) {
 					continue
 				}
 
+				// The job id names the session's folder in the data directory.
+				if !validJobID(job.JobID) {
+					fmt.Fprintf(os.Stderr, "%s: a print with the job id %q is not recorded: not a plain id\n", name, job.JobID)
+
+					continue
+				}
+
 				select {
 				case r.jobs <- jobEvent{
 					settled:  envelope.Type == event.TypeDeviceJobSettled,
@@ -435,6 +442,12 @@ func (r *recorder) onJob(ctx context.Context, job jobEvent) {
 
 	if !job.job.Started.IsZero() {
 		m.Started = job.job.Started
+	}
+
+	if !validJobID(m.JobID) {
+		r.fail("not recorded: the job id %q is not a plain id", m.JobID)
+
+		return
 	}
 
 	s, err := openSession(filepath.Join(r.dataDir, "sessions", m.JobID), m, r.settings.settle, r.settings.MaxPerLayer)

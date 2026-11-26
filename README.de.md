@@ -91,7 +91,7 @@ Berechtigungen: `observe` (Druckerzustand und Ereignisse lesen), `write_storage`
 | Option | Standard | Bedeutung |
 |---|---|---|
 | `camera_url` | leer | `rtsp://…` für den Videostrom, `http://…` für ein Einzelbild. Ports 554, 8554, 322, 80, 8080 oder 443. Leer nimmt nichts auf. Beispiel: `rtsp://192.0.2.50/live` |
-| `camera_username`, `camera_password` | leer | Zugangsdaten der Kamera, falls nötig. Das Passwort wird in Logs ausgeblendet. |
+| `camera_username`, `camera_password` | leer | Zugangsdaten der Kamera, falls nötig. Beide werden im Log ausgeblendet. Nimm ein Konto, das den Strom nur ansehen darf: Andere Erweiterungen auf demselben Server können sie lesen, während ein Druck aufgenommen wird (siehe Sicherheitshinweise). |
 | `printer` | leer | Name oder ID des Druckers, den die Kamera filmt. Leer nimmt den einzigen Drucker oder den ersten, der druckt. |
 | `storage` / `folder` | `local` / `zeitraffer` | Wohin die Zeitraffer geschrieben werden. |
 | `capture_fps` | 2 | Bilder pro Sekunde aus dem Strom, aus denen pro Schicht gewählt wird. |

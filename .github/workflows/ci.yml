@@ -42,9 +42,8 @@ jobs:
           ffmpeg -hide_banner -version | head -n 1
 
       - name: Fetch the Prusa Connect Local SDK
-        run: |
-          core_commit="$(sed -n 's/^CORE_COMMIT[[:space:]]*?=[[:space:]]*//p' Makefile)"
-          git clone -q --depth 1 --branch "$core_commit" https://github.com/prusa3d/prusa-connect.git .core
+        # Clones CORE_COMMIT and refuses it unless it is the commit in CORE_SHA.
+        run: make core-sdk
 
       - name: Vet and test
         run: make test
@@ -57,3 +56,30 @@ jobs:
             GOOS="${target%/*}" GOARCH="${target#*/}" go build -trimpath -o /dev/null .
             echo "built $target"
           done
+
+  commit-messages:
+    name: No session links in commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # actions/checkout v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A commit may name its co-author, but not link a private work session.
+      - name: Refuse Claude-Session trailers
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          found="$(git log --format='%h %(trailers:key=Claude-Session,valueonly,separator=%x2C)' "$BASE..$HEAD" | awk 'NF > 1')"
+          if [ -n "$found" ]; then
+            echo "::error::These commits carry a Claude-Session trailer:"
+            echo "$found"
+            exit 1
+          fi
+          echo "No session links in $(git rev-list --count "$BASE..$HEAD") commits."
