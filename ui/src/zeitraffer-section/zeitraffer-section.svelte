@@ -9,6 +9,7 @@
   let { deviceId }: Props = $props();
 
   const host = heldHost();
+  const t = host.t;
   let status = $state<RecorderStatus | undefined>(undefined);
 
   $effect(() => {
@@ -34,13 +35,13 @@
 {#if status?.configured && status.this_printer}
   <p class="text-sm">
     {#if status.recording}
-      Aufnahme läuft · Schicht {status.layer} · {status.kept ?? 0} Bilder
+      {t('section.recording', { layer: status.layer ?? 0, kept: status.kept ?? 0 })}
     {:else if (status.rendering ?? 0) > 0}
-      Video wird erstellt …
+      {t('section.rendering')}
     {:else}
-      Bereit, der nächste Druck wird aufgenommen.
+      {t('section.ready')}
     {/if}
   </p>
 {:else if status && !status.configured}
-  <p class="text-sm text-muted-foreground">Keine Kamera eingerichtet.</p>
+  <p class="text-sm text-muted-foreground">{t('section.noCamera')}</p>
 {/if}

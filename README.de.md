@@ -1,16 +1,16 @@
-# pcl-timelapse – Zeitraffer für Prusa Connect Local
+# Plug & Play Timelapse für Prusa Connect Local
 
 *Deutsche Übersetzung. Maßgeblich ist die englische [README.md](README.md).*
 
-Eine Erweiterung für [Prusa Connect Local](https://github.com/prusa3d/prusa-connect), den selbst gehosteten Prusa-Connect-Server. Sie nimmt jeden Druck als Zeitraffer auf, mit einem Bild pro Schicht, und braucht dafür **keinen zusätzlichen G-Code**.
+Eine Erweiterung für [Prusa Connect Local](https://github.com/prusa3d/prusa-connect), den selbst gehosteten Prusa-Connect-Server. Sie nimmt jeden Druck als Zeitraffer auf, mit einem Bild pro Schicht, und braucht dafür **keinen zusätzlichen G-Code**: installieren, Kamera-Adresse eintragen, fertig. Das Repository heißt `pcl-timelapse`.
 
 - Die Schicht kommt aus der Z-Höhe, die der Drucker beim Drucken ohnehin meldet.
 - Das Bild kommt aus dem Livebild der Kamera (RTSP) oder von einer Einzelbild-Adresse (HTTP). Pro Schicht wird das Bild gewählt, auf dem der Druckkopf am wenigsten im Weg ist.
-- Am Ende des Drucks entsteht ein H.264-MP4 im Speicher von Prusa Connect Local. Am Drucker gibt es einen Tab „Zeitraffer“ zum Ansehen, Herunterladen und Löschen.
+- Am Ende des Drucks entsteht ein H.264-MP4 im Speicher von Prusa Connect Local. Am Drucker gibt es einen Tab „Timelapse“ zum Ansehen, Herunterladen und Löschen. Aufnahme und Bild eines Druckers sehen nur Personen, die diesen Drucker sehen dürfen.
 
-Status: frühe Version (0.2.x), gebaut und getestet gegen Prusa Connect Local **v0.1.0-beta.1** mit einem Prusa CORE One und einer Buddy3D-Kamera. Die Oberfläche ist deutsch.
+Status: frühe Version (0.3.x), gebaut und getestet gegen Prusa Connect Local **v0.1.0-beta.1** mit einem Prusa CORE One und einer Buddy3D-Kamera. Der Tab ist englisch und deutsch und folgt der in Prusa Connect gewählten Sprache. Der Name des Tabs und die Beschreibungen der Einstellungen sind englisch, weil Prusa Connect Local sie nur in einer Sprache kennt.
 
-> **Braucht ffmpeg auf dem Server.** Prusa Connect Local und sein offizielles Docker-Image bringen kein ffmpeg mit. Ohne ffmpeg wird nichts aufgenommen, der Tab „Zeitraffer“ sagt das dann. Siehe [ffmpeg auf dem Server](#ffmpeg-auf-dem-server).
+> **Braucht ffmpeg auf dem Server.** Prusa Connect Local und sein offizielles Docker-Image bringen kein ffmpeg mit. Ohne ffmpeg wird nichts aufgenommen, der Tab „Timelapse“ sagt das dann. Siehe [ffmpeg auf dem Server](#ffmpeg-auf-dem-server).
 
 ## So funktioniert es
 
@@ -64,14 +64,14 @@ ffmpeg dekodiert den RTSP-Strom und baut das MP4. Es muss dort installiert sein,
 
 - **Anders:** einen ffmpeg-Build für die Plattform des Servers an einen Ort legen, den der Prozess lesen kann, und die Einstellung `ffmpeg` auf den vollen Pfad setzen.
 
-Beim Start der Erweiterung und vor jedem Druck ruft sie `ffmpeg -version` auf. Klappt das nicht, zeigt der Tab „Zeitraffer“ einen Hinweis mit dem Grund, und der Druck wird nicht aufgenommen. Im Server-Log steht dieselbe Zeile. Sobald ffmpeg da ist, wird der nächste Druck ohne Neustart aufgenommen.
+Beim Start der Erweiterung und vor jedem Druck ruft sie `ffmpeg -version` auf. Klappt das nicht, zeigt der Tab „Timelapse“ einen Hinweis mit dem Grund, und der Druck wird nicht aufgenommen. Im Server-Log steht dieselbe Zeile. Sobald ffmpeg da ist, wird der nächste Druck ohne Neustart aufgenommen.
 
 ## Installation
 
 Sobald die Erweiterung im Prusa Plugin Marketplace veröffentlicht ist, unter **Einstellungen → Erweiterungen** installieren. Bis dahin, oder um eine Änderung zu testen, ein Release bauen (siehe unten) und installieren:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.3.0 -from release/timelapse -approve
 ```
 
 Alternativ das Release-Verzeichnis in `core.modules_local` der `config.yaml` eintragen:

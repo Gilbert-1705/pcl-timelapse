@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/prusa3d/prusa-connect/sdk/accessapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
 	"github.com/prusa3d/prusa-connect/sdk/routesapi"
 	"github.com/prusa3d/prusa-connect/sdk/wire"
@@ -23,7 +24,7 @@ import (
 
 const (
 	name    = "timelapse"
-	release = extension.Version("0.2.2")
+	release = extension.Version("0.3.0")
 )
 
 //go:embed openapi.json
@@ -91,6 +92,7 @@ func run() error {
 
 			return nil
 		})
+	rec.access = accessapi.NewClient(conn)
 	methods[routesapi.MethodServe] = routesapi.Serve(rec.routes())
 
 	fmt.Fprintf(os.Stderr, "%s %s is serving on stdio as pid %d\n", name, release, os.Getpid())

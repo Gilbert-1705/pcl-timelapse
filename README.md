@@ -1,16 +1,16 @@
-# pcl-timelapse – timelapse for Prusa Connect Local
+# Plug & Play Timelapse for Prusa Connect Local
 
 *Deutsche Fassung: [README.de.md](README.de.md)*
 
-An extension for [Prusa Connect Local](https://github.com/prusa3d/prusa-connect), the self-hosted Prusa Connect server. It records every print as a timelapse with one frame per layer and needs **no extra G-code**.
+An extension for [Prusa Connect Local](https://github.com/prusa3d/prusa-connect), the self-hosted Prusa Connect server. It records every print as a timelapse with one frame per layer and needs **no extra G-code**: install it, enter the camera address, done. The repository is `pcl-timelapse`.
 
 - The layer comes from the Z height the printer reports while printing anyway.
 - The frame comes from the camera's live stream (RTSP) or from a snapshot URL (HTTP). For every layer the extension keeps the frame in which the print head is least in the way.
-- When the print ends, an H.264 MP4 is stored in Prusa Connect Local's storage. The printer page gets a "Zeitraffer" tab to watch, download and delete the videos.
+- When the print ends, an H.264 MP4 is stored in Prusa Connect Local's storage. The printer page gets a "Timelapse" tab to watch, download and delete the videos. Only people who may view that printer see its recording and picture.
 
-Status: early version (0.2.x), built and tested against Prusa Connect Local **v0.1.0-beta.1** with a Prusa CORE One and a Buddy3D camera. The user interface is German.
+Status: early version (0.3.x), built and tested against Prusa Connect Local **v0.1.0-beta.1** with a Prusa CORE One and a Buddy3D camera. The tab is English and German and follows the language chosen in Prusa Connect. The tab's name and the setting descriptions are English, because Prusa Connect Local knows them in one language only.
 
-> **Needs ffmpeg on the server.** Prusa Connect Local and its official Docker image do not include ffmpeg. Without it nothing is recorded; the "Zeitraffer" tab then says so. See [ffmpeg on the server](#ffmpeg-on-the-server).
+> **Needs ffmpeg on the server.** Prusa Connect Local and its official Docker image do not include ffmpeg. Without it nothing is recorded; the "Timelapse" tab then says so. See [ffmpeg on the server](#ffmpeg-on-the-server).
 
 ## How it works
 
@@ -64,14 +64,14 @@ ffmpeg decodes the RTSP stream and builds the MP4. It has to be installed where 
 
 - **Elsewhere:** put an ffmpeg build for the server's platform somewhere the process can read, and set the setting `ffmpeg` to its full path.
 
-When the extension starts and before every print it runs `ffmpeg -version`. If that fails, the "Zeitraffer" tab shows a notice with the reason and the print is not recorded. The server log has the same line. Once ffmpeg is there, the next print is recorded without a restart.
+When the extension starts and before every print it runs `ffmpeg -version`. If that fails, the "Timelapse" tab shows a notice with the reason and the print is not recorded. The server log has the same line. Once ffmpeg is there, the next print is recorded without a restart.
 
 ## Installation
 
 Once the extension is published on the Prusa Plugin Marketplace, install it under **Settings → Extensions**. Until then, or to try a change, build a release (see below) and install it:
 
 ```sh
-prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from release/timelapse -approve
+prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.3.0 -from release/timelapse -approve
 ```
 
 Or add the release folder to `core.modules_local` in `config.yaml`:

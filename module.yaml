@@ -1,21 +1,21 @@
-# Timelapse for Prusa Connect Local.
+# Plug & Play Timelapse for Prusa Connect Local.
 #
 # One module with both halves: the Go process (main.go), which reads the
 # camera and builds the videos, and the browser bundle in ui/, which adds a
-# "Zeitraffer" tab to the printer page. Title and summary are English for the
-# marketplace; the tab and the setting descriptions are German.
+# "Timelapse" tab to the printer page. Manifest texts are English; the tab
+# draws its texts from ui/src/locales (English, German).
 #
 # Needs ffmpeg on the server (not part of Prusa Connect Local), see README.md.
 #
 # Install from a release folder (see README.md):
-#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.2.2 -from <release> -approve
+#   prusa-connect module add github.com/gilbert-1705/pcl-timelapse@0.3.0 -from <release> -approve
 
 name: timelapse
-title: Timelapse
-summary: Records every print as a timelapse video, one frame per layer, without extra G-code. Reads an RTSP or snapshot camera and needs ffmpeg installed on the server.
+title: Plug & Play Timelapse
+summary: Plug and play timelapses of every print, one frame per layer picked from the camera stream, with no G-code changes. Works with RTSP or snapshot cameras and needs ffmpeg on the server.
 codeowner: Gilbert-1705
 kind: sink
-version: 0.2.2
+version: 0.3.0
 license: MIT
 contract_major: 1
 openapi: openapi.json
@@ -33,17 +33,20 @@ require:
   # File name of the print when the start event does not carry it yet.
   core-device.jobs: "*"
   core-storage.write: "*"
+  # /status and /preview ask whether the person on the page may observe the
+  # printer before they show anything of it (access.go).
+  core-access.check: "*"
 
-# observe: Druckerzustand und Ereignisse lesen. write_storage: Videos ablegen.
+# observe: read printer state and events. write_storage: store the videos.
 permissions:
   - observe
   - write_storage
 
 needs:
-  # Einzelbilder der laufenden Schicht und die ausgewählten Bilder bis zum
-  # Druckende liegen hier, nicht im Speicher.
+  # Frames of the current layer and the picked frames stay here until the
+  # print ends, not in the storage.
   data: true
-  # Go-Prozess plus ffmpeg, das den H.264-Strom der Kamera dekodiert.
+  # The Go process plus ffmpeg, which decodes the camera's H.264 stream.
   memory_mib: 512
 
 # The only connection outside Prusa Connect: the camera the operator sets in
@@ -51,7 +54,8 @@ needs:
 # refused when the settings are read, and a snapshot redirect is followed only
 # to the same scheme, host and port. For rtsp:// and rtsps:// the process
 # starts ffmpeg (setting ffmpeg, no shell, fixed arguments, frames.go) with
-# -rtsp_transport tcp, so ffmpeg opens one TCP connection to that address.
+# -rtsp_transport tcp and -protocol_whitelist rtsp,rtp,tcp,udp,tls, so ffmpeg
+# opens one TCP connection to that address and speaks nothing but RTSP.
 # Details for reviewers: docs/security-notes.md.
 egress:
   - option: camera_url
@@ -64,83 +68,83 @@ options:
   - key: camera_url
     type: url
     default: ""
-    summary: Adresse der Kamera. rtsp://… für den Videostrom (Buddy3D), http://… für eine Adresse, die ein einzelnes JPEG liefert. Erlaubte Ports 554, 8554, 322, 80, 8080 und 443. Leer nimmt nichts auf.
+    summary: Camera address. rtsp://… for the video stream (for example the Buddy3D), http://… for an address that answers one JPEG. Allowed ports 554, 8554, 322, 80, 8080 and 443. Empty records nothing.
   - key: camera_username
     type: string
     default: ""
-    summary: Benutzername der Kamera, falls sie einen verlangt.
+    summary: Camera username, if the camera asks for one.
   - key: camera_password
     type: secret
     default: ""
-    summary: Passwort der Kamera, falls sie eines verlangt.
+    summary: Camera password, if the camera asks for one. Use an account that can only view the stream.
   - key: printer
     type: string
     default: ""
-    summary: Name oder ID des Druckers, den die Kamera filmt. Leer nimmt den einzigen Drucker bzw. den ersten, der einen Druck startet.
+    summary: Name or ID of the printer the camera films. Empty takes the only printer, or the first one that starts a print.
   - key: storage
     type: string
     default: local
-    summary: Speicher, in den die Zeitraffer geschrieben werden.
+    summary: Storage the timelapses are written to.
   - key: folder
     type: string
     default: zeitraffer
-    summary: Ordner im Speicher. Darunter je Drucker ein Ordner und je Druck einer mit zeitraffer.mp4, vorschau.jpg und info.json.
+    summary: Folder in the storage. Below it one folder per printer and one per print with zeitraffer.mp4, vorschau.jpg and info.json.
   - key: capture_fps
     type: number
     default: "2"
-    summary: Wie viele Bilder pro Sekunde aus dem Strom gelesen werden, um daraus je Schicht das beste zu wählen.
+    summary: How many frames per second are read from the stream to pick the best one per layer.
   - key: video_fps
     type: int
     default: "30"
-    summary: Bilder pro Sekunde im fertigen Video. 300 Schichten ergeben bei 30 also 10 Sekunden.
+    summary: Frames per second in the finished video. At 30, 300 layers make 10 seconds.
   - key: hold_last_s
     type: number
     default: "1.5"
-    summary: Wie lange das letzte Bild am Ende des Videos stehen bleibt, in Sekunden.
+    summary: How long the last frame stays at the end of the video, in seconds.
   - key: layer_settle
     type: duration
     default: 12s
-    summary: Wie lange eine neue Z-Höhe halten muss, bis sie als neue Schicht gilt. Filtert Z-Hops heraus. Muss über dem Telemetrie-Abstand des Druckers (5 s) liegen.
+    summary: How long a new Z height must hold before it counts as a new layer. Filters out Z hops. Must be longer than the printer's telemetry interval (5 s).
   - key: min_layers
     type: int
     default: "10"
-    summary: Drucke mit weniger Schichten bekommen kein Video.
+    summary: Prints with fewer layers get no video.
   - key: max_frames_per_layer
     type: int
     default: "240"
-    summary: Obergrenze an Bildern, die je Schicht zur Auswahl vorgehalten werden. Bei langen Schichten wird ausgedünnt.
+    summary: Most frames kept per layer to pick from. Long layers are thinned out.
   - key: keep_frames
     type: bool
     default: "false"
-    summary: Die ausgewählten Einzelbilder zusätzlich zum Video im Ordner bilder/ ablegen.
+    summary: Also store the picked frames next to the video, in the folder bilder/.
   - key: timezone
     type: string
     default: Europe/Berlin
-    summary: Zeitzone für Datum und Uhrzeit im Ordnernamen, etwa Europe/Berlin. Leer nimmt die des Servers (im Container meist UTC).
+    summary: Time zone for the date and time in the folder name, for example Europe/Berlin. Empty takes the server's (usually UTC in a container).
   - key: diagnose_layers
     type: int
     default: "0"
-    summary: Diagnose. Für so viele Schichten eines Drucks werden alle Kandidatenbilder samt Bewertung und Referenzbild unter diagnose/ neben dem Video abgelegt (960 Pixel breit, etwa 5 bis 10 MB pro Schicht). 0 schaltet die Diagnose aus.
+    summary: Diagnosis. For this many layers of a print, all candidate frames with their scores and the reference frame are stored under diagnose/ next to the video (960 pixels wide, about 5 to 10 MB per layer). 0 turns diagnosis off.
   - key: diagnose_every
     type: int
     default: "20"
-    summary: Diagnose. Jede wievielte Schicht festgehalten wird, ab dieser Schicht. Bei 20 also Schicht 20, 40, 60 und so weiter, bis diagnose_layers erreicht ist.
+    summary: Diagnosis. Every how many layers one is kept, starting with that layer. At 20 that is layers 20, 40, 60 and so on, until diagnose_layers is reached.
   - key: performance
     type: string
     default: normal
-    summary: "normal oder low. low ist für kleine Rechner wie einen Raspberry Pi: Vom Kamerastrom werden nur Keyframes dekodiert, höchstens ein Bild pro Sekunde mit 1280 Pixeln, und das Video wird mit einem Thread und niedriger Priorität gebaut. Das spart CPU und Speicher, dauert aber länger und gibt pro Schicht weniger Bilder zur Auswahl."
+    summary: "normal or low. low is for small computers such as a Raspberry Pi: only keyframes of the stream are decoded, at most one frame per second at 1280 pixels, and the video is built with one thread at low priority. That saves CPU and memory, takes longer and gives fewer frames per layer to pick from."
   - key: gcode_park
     type: bool
     default: "false"
-    summary: Nur einschalten, wenn der Slicer den Druckkopf nach jedem Schichtwechsel kurz aus dem Bild parkt (Anleitung in docs/gcode-park.md). Dann nimmt der Zeitraffer das Bild, auf dem der Kopf still steht, statt es zu schätzen. Ohne Park-G-Code bleibt es aus.
+    summary: Optional. Turn on only if the slicer parks the print head out of the picture after every layer change (see docs/gcode-park.md). The timelapse then takes the frame where the head stands still instead of estimating it. Without park G-code leave it off; the default needs no G-code.
   - key: park_window
     type: duration
     default: 20s
-    summary: Wie lange nach Beginn einer Schicht nach dem geparkten Kopf gesucht wird (3 s bis 2 min). Muss länger sein als Parkbewegung und Wartezeit zusammen.
+    summary: How long after a layer starts the parked head is looked for (3 s to 2 min). Must be longer than the park move and the wait together.
   - key: ffmpeg
     type: string
     default: ffmpeg
-    summary: Pfad zu ffmpeg auf dem Server. ffmpeg gehört nicht zu Prusa Connect Local und muss auf dem Server installiert sein (siehe README). Fehlt es, zeigt der Tab Zeitraffer einen Hinweis.
+    summary: Path to ffmpeg on the server. ffmpeg is not part of Prusa Connect Local and must be installed on the server (see README). If it is missing, the Timelapse tab says so.
 
 ui:
   entry: ui/index.js
@@ -148,7 +152,7 @@ ui:
   contributes:
     device_tab:
       - id: zeitraffer
-        title: Zeitraffer
+        title: Timelapse
     device_section:
       - id: zeitraffer
-        title: Zeitraffer
+        title: Timelapse

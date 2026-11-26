@@ -5,6 +5,31 @@ first. `version:` in `module.yaml` is the newest heading below. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions
 follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 - 2026-11-26
+
+### Changed
+
+- New title "Plug & Play Timelapse", so it is easier to tell apart from other
+  timelapse extensions. The extension ID, the settings and the recorded videos
+  stay as they are; nothing has to be reinstalled.
+- The tab and the section on the printer page are called "Timelapse" and
+  follow the language of Prusa Connect: English and German are included,
+  other languages show English. Dates, numbers and sizes are written the way
+  the chosen language writes them.
+- The setting descriptions are English.
+- The tab and its picture only show the printer the extension records to
+  people who may view that printer (`observe`). Everyone else sees that there
+  is nothing to show for them, without the printer's name or print. The
+  extension asks the server (`core-access.check`); approve the new capability
+  when you update.
+
+### Security
+
+- ffmpeg reads the camera with `-protocol_whitelist rtsp,rtp,tcp,udp,tls`, so
+  an answer from the camera cannot make it open a file, an HTTP address or any
+  other protocol. ffmpeg still follows an RTSP redirect of the camera itself;
+  see `docs/security-notes.md`.
+
 ## 0.2.2 - 2026-11-22
 
 First release for the Prusa Plugin Marketplace.

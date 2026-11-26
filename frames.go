@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -71,34 +72,52 @@ const lowWidth = 1280
 // interval, typically one every one or two seconds.
 func (s ffmpegSource) captureArgs() []string {
 	rate := strconv.FormatFloat(s.fps, 'f', -1, 64)
+	input := s.inputArgs()
 
 	if !s.low {
-		return []string{
+		return slices.Concat([]string{
 			"-hide_banner", "-loglevel", "error", "-nostdin",
 			"-threads", "2", "-filter_threads", "1",
-			"-rtsp_transport", "tcp",
-			"-i", s.url,
+		}, input, []string{
 			"-an",
 			"-vf", "fps=" + rate,
 			"-c:v", "mjpeg", "-q:v", "3",
 			"-f", "image2pipe", "-",
-		}
+		})
 	}
 
 	gap := strconv.FormatFloat(1/s.fps, 'f', -1, 64)
 
-	return []string{
+	return slices.Concat([]string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-threads", "1", "-filter_threads", "1",
-		"-rtsp_transport", "tcp",
 		"-skip_frame", "nokey",
-		"-i", s.url,
+	}, input, []string{
 		"-an",
 		"-vf", "select='isnan(prev_selected_t)+gte(t-prev_selected_t\\," + gap + ")'," +
 			"scale=trunc(min(" + strconv.Itoa(lowWidth) + "\\,iw)/2)*2:-2",
 		"-fps_mode", "vfr",
 		"-c:v", "mjpeg", "-q:v", "4",
 		"-f", "image2pipe", "-",
+	})
+}
+
+// rtspProtocols are the only protocols ffmpeg may open for the camera stream:
+// RTSP over TCP, the RTP inside it, and TLS for rtsps://. Nothing the camera
+// answers can make ffmpeg read a file, an HTTP address or another protocol.
+const rtspProtocols = "rtsp,rtp,tcp,udp,tls"
+
+// inputArgs open the stream. Only RTSP addresses reach ffmpeg in a running
+// module (sourceFor); the tests also hand it local files, which keep ffmpeg's
+// default protocols.
+func (s ffmpegSource) inputArgs() []string {
+	scheme, _, _ := strings.Cut(s.url, "://")
+
+	switch strings.ToLower(scheme) {
+	case "rtsp", "rtsps":
+		return []string{"-rtsp_transport", "tcp", "-protocol_whitelist", rtspProtocols, "-i", s.url}
+	default:
+		return []string{"-i", s.url}
 	}
 }
 

@@ -73,7 +73,10 @@ type recorder struct {
 	once sync.Once
 	wg   sync.WaitGroup
 
-	conn     *wirerpc.Conn
+	conn *wirerpc.Conn
+	// access asks the server whether the person on the page may observe the
+	// printer; set in main before the routes serve.
+	access   checker
 	settings Settings
 	dataDir  string
 
