@@ -1,6 +1,7 @@
+import { formatDateTime } from '@prusa/connect-ui/i18n';
 import type { ModuleHost } from '@prusa/connect-ui/slots';
 
-/** Was GET /status des Moduls antwortet. */
+/** What the module's GET /status answers. */
 export interface RecorderStatus {
   configured: boolean;
   device_id?: string;
@@ -19,13 +20,13 @@ export interface RecorderStatus {
   rendering?: number;
   last_video?: string;
   last_error?: string;
-  /** Erste Zeile von `ffmpeg -version`. */
+  /** First line of `ffmpeg -version`. */
   ffmpeg?: string;
-  /** Warum ffmpeg nicht läuft. Ohne ffmpeg wird nichts aufgenommen. */
+  /** Why ffmpeg does not run. Without ffmpeg nothing is recorded. */
   ffmpeg_problem?: string;
 }
 
-/** Ein fertiger Zeitraffer: ein Ordner im Speicher. */
+/** A finished timelapse: one folder in the storage. */
 export interface Run {
   path: string;
   name: string;
@@ -33,15 +34,15 @@ export interface Run {
   size: number;
   outcome?: string;
   layers?: number;
-  /** Druckstart aus info.json, ISO-Zeit. */
+  /** Print start from info.json, ISO time. */
   started?: string;
-  /** Schichten mit Diagnose-Bildern. */
+  /** Layers with diagnosis frames. */
   diagnosed?: number;
 }
 
-// Die App lädt dieses Bündel von /api/v1/modules/<namespace>/ui/ui/index.js.
-// Die eigenen Routen liegen unter /api/v1/modules/<namespace>/. Aus der eigenen
-// Adresse abgeleitet, weil ModuleHost.namespace erst nach v0.1.0-beta.1 kam.
+// The app loads this bundle from /api/v1/modules/<namespace>/ui/ui/index.js and
+// the module's routes are under /api/v1/modules/<namespace>/. Derived from the
+// bundle's own address, because ModuleHost.namespace came after v0.1.0-beta.1.
 const moduleBase = ((): string => {
   const path = new URL(import.meta.url).pathname;
   const cut = path.indexOf('/ui/');
@@ -80,7 +81,7 @@ interface Entry {
   size?: number;
 }
 
-/** Die Zeitraffer eines Druckers, neueste zuerst. */
+/** A printer's timelapses, newest first. */
 export const listRuns = async (
   host: ModuleHost,
   storage: string,
@@ -96,9 +97,9 @@ export const listRuns = async (
     )) as unknown as { items?: Entry[] };
     entries = page.items ?? [];
   } catch (error) {
-    // Ein Ordner, den es noch nicht gibt: noch kein Zeitraffer.
-    // Ein Ordner, den es noch nicht gibt, antwortet 404 oder core.storage/INVALID_PATH.
-    // Ohne instanceof: das Bündel und die App haben je eine eigene Kopie der Fehlerklasse.
+    // A folder that does not exist yet means no timelapse yet. It answers 404
+    // or core.storage/INVALID_PATH. No instanceof: the bundle and the app each
+    // hold their own copy of the error class.
     const failure = error as { status?: number; code?: string };
     if (failure.status === 404 || failure.code === 'core.storage/INVALID_PATH') return [];
     throw error;
@@ -133,10 +134,10 @@ export const listRuns = async (
         if (info.schichten !== undefined) run.layers = info.schichten;
         if (info.gestartet !== undefined) run.started = info.gestartet;
         if (info.diagnose) run.diagnosed = info.diagnose;
-        // Die Größe eines Ordners im Listing ist nicht die des Videos.
+        // A folder's size in the listing is not the video's.
         run.size = info.video_bytes ?? (await videoSize(host, storage, run.path, signal));
       } catch {
-        // Ohne info.json bleibt der Eintrag trotzdem in der Liste.
+        // Without info.json the entry still stays in the list.
       }
     }),
   );
@@ -144,7 +145,7 @@ export const listRuns = async (
   return runs;
 };
 
-/** Größe von zeitraffer.mp4 in einem Lauf, für Läufe ohne video_bytes in info.json. */
+/** Size of zeitraffer.mp4 in a run, for runs without video_bytes in info.json. */
 const videoSize = async (
   host: ModuleHost,
   storage: string,
@@ -162,26 +163,26 @@ const videoSize = async (
   }
 };
 
-/** Datum und Uhrzeit in Ortszeit des Browsers, etwa „20.11.2026 23:44“. */
+/** A print start from info.json, in the reader's language and clock. */
 export const formatStarted = (iso: string): string => {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  return formatDateTime(date);
 };
 
 export const deleteRun = (host: ModuleHost, storage: string, path: string): Promise<void> =>
   host.client.deleteStorageEntry({ path: { storage }, query: { path } });
 
-/** Macht aus „2026-11-20_18-05_halter-v2“ Datum und Name. */
+/** Splits „2026-11-20_18-05_holder-v2“ into the start, in the reader's language, and the name. */
 export const describeRun = (name: string): { when: string; title: string } => {
   const match = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})_(.*)$/.exec(name);
   if (!match) return { when: '', title: name };
   const [, y, mo, d, h, mi, rest] = match;
+  const started = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi));
 
-  return { when: `${d}.${mo}.${y} ${h}:${mi}`, title: (rest ?? '').replaceAll('-', ' ') };
+  return { when: formatDateTime(started), title: (rest ?? '').replaceAll('-', ' ') };
 };
 
-export const outcomeLabel = (outcome?: string): string =>
-  ({ finished: 'fertig', failed: 'fehlgeschlagen', cancelled: 'abgebrochen', unknown: 'unbekannt' })[
-    outcome ?? ''
-  ] ?? '';
+/** The catalogue key of a run's outcome, or '' for none. */
+export const outcomeKey = (outcome?: string): string =>
+  ['finished', 'failed', 'cancelled', 'unknown'].includes(outcome ?? '') ? `runs.outcome.${outcome}` : '';

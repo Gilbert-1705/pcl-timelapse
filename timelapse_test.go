@@ -307,7 +307,7 @@ func TestSettingsPutTheCredentialsIntoTheAddress(t *testing.T) {
 	}
 
 	hidden := secretsOf(s.CameraURL)
-	if len(hidden) == 0 || hidden[0] != "geh eim" {
+	if !slices.Contains(hidden, "geh eim") || !slices.Contains(hidden, "geh%20eim") {
 		t.Fatalf("secrets %q", hidden)
 	}
 }

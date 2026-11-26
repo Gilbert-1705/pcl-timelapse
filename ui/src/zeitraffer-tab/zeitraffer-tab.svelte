@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Badge, Button, ConfirmDialog, EmptyState } from '@prusa/connect-ui';
+  import { formatBytes, formatNumber } from '@prusa/connect-ui/i18n';
 
   import {
     contentUrl,
@@ -7,7 +8,7 @@
     describeRun,
     formatStarted,
     listRuns,
-    outcomeLabel,
+    outcomeKey,
     previewUrl,
     readStatus,
     type RecorderStatus,
@@ -22,6 +23,7 @@
   let { deviceId }: Props = $props();
 
   const host = heldHost();
+  const t = host.t;
 
   let status = $state<RecorderStatus | undefined>(undefined);
   let runs = $state<Run[]>([]);
@@ -36,7 +38,7 @@
       runs = await listRuns(host, status.storage, status.folder, signal);
       loadedFolder = status.folder;
     } catch (error) {
-      if (!signal?.aborted) failure = `Die Zeitraffer konnten nicht gelesen werden: ${String(error)}`;
+      if (!signal?.aborted) failure = t('tab.readFailed', { error: String(error) });
     }
   };
 
@@ -73,12 +75,11 @@
       await deleteRun(host, status.storage, run.path);
       runs = runs.filter((r) => r.path !== run.path);
     } catch (error) {
-      failure = `Löschen fehlgeschlagen: ${String(error)}`;
+      failure = t('tab.deleteFailed', { error: String(error) });
     }
   };
 
-  const megabytes = (bytes: number): string =>
-    bytes > 0 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '';
+  const size = (bytes: number): string => (bytes > 0 ? formatBytes(bytes) : '');
 </script>
 
 <div class="flex flex-col gap-6">
@@ -87,57 +88,66 @@
   {/if}
 
   {#if status === undefined}
-    <p class="text-sm text-muted-foreground">Lade …</p>
+    <p class="text-sm text-muted-foreground">{t('tab.loading')}</p>
   {:else if !status.configured}
     <EmptyState
       headingLevel="h2"
-      heading="Keine Kamera eingerichtet"
-      description="Trage unter Einstellungen → Erweiterungen → Zeitraffer die Adresse der Kamera ein (camera_url, z. B. rtsp://192.0.2.50/live)."
+      heading={t('tab.noCamera.heading')}
+      description={t('tab.noCamera.description')}
+    />
+  {:else if !status.this_printer && !status.device_id}
+    <!-- The module answers without a printer when the person may not observe it. -->
+    <EmptyState
+      headingLevel="h2"
+      heading={t('tab.hidden.heading')}
+      description={t('tab.hidden.description')}
     />
   {:else if !status.this_printer}
     <EmptyState
       headingLevel="h2"
-      heading="Die Kamera filmt einen anderen Drucker"
-      description={`Zeitraffer werden für ${status.device_name ?? status.device_id} aufgenommen.`}
+      heading={t('tab.otherPrinter.heading')}
+      description={t('tab.otherPrinter.description', {
+        printer: status.device_name ?? status.device_id ?? '',
+      })}
     />
   {:else}
     <section class="flex flex-col gap-3">
       <div class="flex flex-wrap items-center gap-2">
-        <h2 class="text-sm font-semibold">Aufnahme</h2>
+        <h2 class="text-sm font-semibold">{t('tab.recording.heading')}</h2>
         {#if status.recording}
-          <Badge variant="stateActive">läuft</Badge>
+          <Badge variant="stateActive">{t('tab.recording.running')}</Badge>
         {:else if (status.rendering ?? 0) > 0}
-          <Badge variant="info">Video wird erstellt</Badge>
+          <Badge variant="info">{t('tab.recording.rendering')}</Badge>
         {:else}
-          <Badge variant="stateIdle">wartet auf den nächsten Druck</Badge>
+          <Badge variant="stateIdle">{t('tab.recording.waiting')}</Badge>
         {/if}
       </div>
 
       {#if status.recording}
         <p class="text-sm">
-          {status.job} · Schicht {status.layer}
-          {#if status.z}(Z {status.z.toFixed(2)} mm){/if}
-          · {status.kept ?? 0} Bilder ausgewählt · {status.frames_in_layer ?? 0} Bilder in der laufenden Schicht
+          {t('tab.recording.progress', { job: status.job ?? '', layer: status.layer ?? 0 })}
+          {#if status.z}{t('tab.recording.height', {
+              z: formatNumber(status.z, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            })}{/if}
+          · {t('tab.recording.frames', { kept: status.kept ?? 0, inLayer: status.frames_in_layer ?? 0 })}
         </p>
       {/if}
 
       {#if status.ffmpeg_problem}
         <p class="text-sm text-warning">
-          ffmpeg fehlt oder startet nicht, deshalb wird nichts aufgenommen. Installiere ffmpeg auf dem
-          Server oder trage unter Einstellungen → Erweiterungen → Zeitraffer bei „ffmpeg“ den vollen Pfad
-          ein. Details: {status.ffmpeg_problem}
+          {t('tab.ffmpegMissing', { problem: status.ffmpeg_problem })}
         </p>
       {/if}
 
       {#if status.last_error}
-        <p class="text-sm text-warning">Zuletzt: {status.last_error}</p>
+        <p class="text-sm text-warning">{t('tab.lastError', { error: status.last_error })}</p>
       {/if}
 
       {#if status.recording || status.last_video}
         <img
           class="w-full max-w-xl rounded-md border border-border"
           src={previewUrl(host, stamp)}
-          alt="Zuletzt ausgewähltes Bild"
+          alt={t('tab.preview.alt')}
           onerror={(event) => ((event.currentTarget as HTMLImageElement).style.display = 'none')}
           onload={(event) => ((event.currentTarget as HTMLImageElement).style.display = '')}
         />
@@ -146,14 +156,12 @@
 
     <section class="flex flex-col gap-3">
       <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold">Fertige Zeitraffer</h2>
-        <Button variant="ghost" size="sm" onclick={() => void refreshRuns()}>Aktualisieren</Button>
+        <h2 class="text-sm font-semibold">{t('runs.heading')}</h2>
+        <Button variant="ghost" size="sm" onclick={() => void refreshRuns()}>{t('runs.refresh')}</Button>
       </div>
 
       {#if runs.length === 0}
-        <p class="text-sm text-muted-foreground">
-          Noch keiner. Der nächste Druck wird automatisch aufgenommen.
-        </p>
+        <p class="text-sm text-muted-foreground">{t('runs.empty')}</p>
       {:else}
         <ul class="flex flex-col gap-4">
           {#each runs as run (run.path)}
@@ -164,15 +172,15 @@
                 <span class="text-xs text-muted-foreground">
                   {run.started ? formatStarted(run.started) || described.when : described.when}
                 </span>
-                {#if run.outcome}
+                {#if outcomeKey(run.outcome)}
                   <Badge variant={run.outcome === 'finished' ? 'success' : 'warning'}>
-                    {outcomeLabel(run.outcome)}
+                    {t(outcomeKey(run.outcome))}
                   </Badge>
                 {/if}
-                {#if run.layers}<span class="text-xs text-muted-foreground">{run.layers} Schichten</span>{/if}
-                {#if run.size}<span class="text-xs text-muted-foreground">{megabytes(run.size)}</span>{/if}
+                {#if run.layers}<span class="text-xs text-muted-foreground">{t('runs.layers', { count: run.layers })}</span>{/if}
+                {#if run.size}<span class="text-xs text-muted-foreground">{size(run.size)}</span>{/if}
                 {#if run.diagnosed}
-                  <span class="text-xs text-muted-foreground">Diagnose: {run.diagnosed} Schichten</span>
+                  <span class="text-xs text-muted-foreground">{t('runs.diagnosed', { count: run.diagnosed })}</span>
                 {/if}
               </div>
 
@@ -191,33 +199,33 @@
                   type="button"
                   class="w-full max-w-xs cursor-pointer"
                   onclick={() => (playing = run.path)}
-                  aria-label="Zeitraffer abspielen"
+                  aria-label={t('runs.play.label')}
                 >
                   <img
                     class="w-full rounded-md"
                     loading="lazy"
                     src={contentUrl(status.storage, `${run.path}/vorschau.jpg`)}
-                    alt={`Vorschau ${described.title}`}
+                    alt={t('runs.preview.alt', { title: described.title })}
                   />
                 </button>
               {/if}
 
               <div class="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" onclick={() => (playing = run.path)}>Abspielen</Button>
+                <Button variant="secondary" size="sm" onclick={() => (playing = run.path)}>{t('runs.play')}</Button>
                 <a
                   class="text-sm text-link underline-offset-4 hover:underline self-center"
                   href={contentUrl(status.storage, `${run.path}/zeitraffer.mp4`)}
-                  download={`${run.name}.mp4`}>Herunterladen</a
+                  download={`${run.name}.mp4`}>{t('runs.download')}</a
                 >
                 <ConfirmDialog
-                  title="Zeitraffer löschen?"
-                  description={`„${described.title}“ vom ${described.when} wird mit Video und Vorschau gelöscht.`}
-                  confirmLabel="Löschen"
+                  title={t('runs.delete.title')}
+                  description={t('runs.delete.description', { title: described.title, when: described.when })}
+                  confirmLabel={t('runs.delete')}
                   variant="destructive"
                   onConfirm={() => void remove(run)}
                 >
                   {#snippet trigger({ props })}
-                    <Button {...props} variant="ghost" size="sm">Löschen</Button>
+                    <Button {...props} variant="ghost" size="sm">{t('runs.delete')}</Button>
                   {/snippet}
                 </ConfirmDialog>
               </div>

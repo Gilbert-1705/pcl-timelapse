@@ -8,8 +8,8 @@ name: Marketplace dry run
 # The builder's publish job asks for id-token and attestations even in a dry
 # run, so they are granted here. In a dry run it requests no token and makes
 # no attestation, and the marketplace accepts a release only from release.yml
-# in the environment "release". Pull requests from forks are skipped: they get
-# no id-token.
+# in the environment "release". Pull requests from forks and from Dependabot
+# are skipped.
 
 on:
   pull_request:
@@ -20,7 +20,12 @@ permissions: {}
 
 jobs:
   dry-run:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    # Dependabot's pull requests get no id-token either; they only bump
+    # pinned actions, which the other checks cover.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.actor != 'dependabot[bot]')
     # prusa3d/prusa-connect-marketplace-publish v1.0.2, pinned to its commit.
     uses: prusa3d/prusa-connect-marketplace-publish/.github/workflows/publish.yml@56dae34cf597f36239b0fefea87d07de0c91d236 # v1.0.2
     with:

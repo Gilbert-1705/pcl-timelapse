@@ -103,9 +103,11 @@ func TestTheLowProfileReadsOnlyKeyframesOnceASecond(t *testing.T) {
 		t.Fatalf("arguments: %v", args)
 	}
 
-	// A file is no RTSP stream: drop the transport and write single files.
-	i := slices.Index(args, "-rtsp_transport")
-	args = slices.Delete(args, i, i+2)
+	// A file gets no RTSP options (inputArgs); write single files.
+	if slices.Contains(args, "-rtsp_transport") {
+		t.Fatalf("a file gets RTSP options: %v", args)
+	}
+
 	args = append(args[:len(args)-3], "-f", "image2", filepath.Join(dir, "f%03d.jpg"))
 
 	if out, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {

@@ -73,7 +73,10 @@ type recorder struct {
 	once sync.Once
 	wg   sync.WaitGroup
 
-	conn     *wirerpc.Conn
+	conn *wirerpc.Conn
+	// access asks the server whether the person on the page may observe the
+	// printer; set in main before the routes serve.
+	access   checker
 	settings Settings
 	dataDir  string
 
@@ -196,6 +199,13 @@ func (r *recorder) followJobs(ctx context.Context) {
 
 				var job event.JobSettled
 				if json.Unmarshal(envelope.Data, &job) != nil || job.JobID == "" {
+					continue
+				}
+
+				// The job id names the session's folder in the data directory.
+				if !validJobID(job.JobID) {
+					fmt.Fprintf(os.Stderr, "%s: a print with the job id %q is not recorded: not a plain id\n", name, job.JobID)
+
 					continue
 				}
 
@@ -432,6 +442,12 @@ func (r *recorder) onJob(ctx context.Context, job jobEvent) {
 
 	if !job.job.Started.IsZero() {
 		m.Started = job.job.Started
+	}
+
+	if !validJobID(m.JobID) {
+		r.fail("not recorded: the job id %q is not a plain id", m.JobID)
+
+		return
 	}
 
 	s, err := openSession(filepath.Join(r.dataDir, "sessions", m.JobID), m, r.settings.settle, r.settings.MaxPerLayer)

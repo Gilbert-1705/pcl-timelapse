@@ -22,12 +22,23 @@ from the process, on ports 554, 8554, 322, 80, 8080 and 443.
 - **Redirects:** the HTTP client for snapshots (`cameraClient`) follows a
   redirect only to the same scheme, host and port, at most twice. A camera
   cannot send the process, or the credentials, elsewhere.
-- **RTSP over TCP:** ffmpeg is started with `-rtsp_transport tcp`, so it opens
-  one TCP connection to the address in `camera_url` and no UDP ports.
+- **RTSP over TCP, RTSP only:** ffmpeg is started with `-rtsp_transport tcp`,
+  so it opens one TCP connection to the address in `camera_url` and no UDP
+  ports, and with `-protocol_whitelist rtsp,rtp,tcp,udp,tls`
+  (`ffmpegSource.inputArgs`), so nothing the camera answers can make ffmpeg
+  open a file, an HTTP address or any other protocol.
+- **RTSP redirects (known limit):** ffmpeg's RTSP client follows a 3xx answer
+  of the camera to the address in its `Location` header, and ffmpeg has no
+  option to turn that off. The whitelist keeps such a redirect on RTSP, but
+  not on the host or port in `camera_url`, and the camera credentials may go
+  along. Only the camera itself can send such an answer, so this
+  is a camera the operator already trusts with the stream; point
+  `camera_url` at the camera directly and use a camera account that can only
+  view the stream (see the known limit below).
 
 There is no other connection: no update check, no telemetry, no third-party
 service. Everything else goes through the module protocol to the host
-(`observe`, `write_storage`, `core-device.*`).
+(`observe`, `write_storage`, `core-device.*`, `core-access.check`).
 
 ## The ffmpeg child process
 
@@ -58,14 +69,28 @@ Why this is not a command injection path:
   extension; the stream reader has a `WaitDelay`, the version check a 10 s
   timeout. Rendering uses at most two threads (one in the `low` profile) and,
   in that profile, a lower process priority.
-- **Logs without secrets:** ffmpeg's stderr goes to the host log with the
-  camera password replaced by `xxxxx` (`prefixed`, `secretsOf`).
+- **Logs without secrets:** ffmpeg's stderr goes to the host log line by
+  line (`redact.go`). Every `scheme://userinfo@` in a line becomes
+  `scheme://xxxxx@`, and every spelling of the camera password (plain, path,
+  query and userinfo escaping, as ffmpeg quotes it) becomes `xxxxx`. A line
+  split across two writes is held back until it is complete. A table test
+  covers passwords with spaces, `!`, `#`, `%`, `@`, `:`, `/` and umlauts, and
+  a second test runs ffmpeg itself against an unreachable address.
+- **Camera pictures are bounded:** before a frame or the preview is
+  decoded, its JPEG header is read and anything over 4096 × 4096 pixels is
+  dropped (`limits.go`), so a camera cannot claim dimensions that take more
+  memory than `needs.memory_mib`.
+- **Folder names:** a print's job id names its folder in the data folder
+  only if it is a plain id (letters, digits, `-`, `_`, at most 64
+  characters); otherwise the print is not recorded.
 
 Known limit: ffmpeg accepts RTSP credentials only inside the address, so the
 camera password is part of ffmpeg's command line while the stream is open.
-Other processes of the same user on the same host (in Docker: in the same
-container) can read it there. Use a camera account that can only view the
-stream.
+Prusa Connect Local starts every extension as a child process of the same
+user in the same container (or host), so every other extension and every
+other process there can read it, for example in `/proc/<pid>/cmdline`. Use a
+camera account that can only view the stream, and install only extensions
+you trust with that.
 
 ## Data the extension writes
 
@@ -85,6 +110,15 @@ Two read-only routes under the module's prefix, served through the host and
 behind its authentication: `GET /status` (recording state, JSON) and
 `GET /preview` (the last chosen frame, a re-encoded JPEG with
 `X-Content-Type-Options: nosniff`). Every other path answers 404.
+
+The host lets in everyone who may open the extension. Both routes then ask
+the server (`access.check`, `access.go`) whether the signed-in person may
+`observe` the printer the recorder follows. Someone who may not gets no
+picture (204) and a status without anything of that printer: no name, no
+print, no folder. The check fails closed: no person, no answer from the
+server or a refusal all count as "may not". `observe` is in `permissions`, so
+the module may ask about it without a `checks` entry; it asks about nothing
+else.
 
 ## Reporting
 

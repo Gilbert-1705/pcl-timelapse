@@ -14,6 +14,9 @@
 # The Prusa Connect Local release this is built and tested against.
 CORE_REPO   ?= https://github.com/prusa3d/prusa-connect.git
 CORE_COMMIT ?= v0.1.0-beta.1
+# The commit that tag must point at. A tag can be moved; a checkout at any
+# other commit is refused. Empty skips the check (for a hand-made .core).
+CORE_SHA    ?= b194cb83b682822e95e839a3cecf4391f3929e87
 
 PNPM ?= pnpm
 CORE := .core
@@ -22,7 +25,7 @@ CORE := .core
 export CI ?= true
 export COREPACK_ENABLE_DOWNLOAD_PROMPT ?= 0
 
-.PHONY: core test check ui-build release clean
+.PHONY: core core-sdk test check ui-build release clean
 
 # The checkout is cloned once. A .core that is already there (the
 # marketplace builder checks it out itself, or a symlink) is used as it is.
@@ -32,15 +35,25 @@ $(CORE)/sdk/go.mod:
 	fi
 	@test -f $@ || { echo "$(CORE) is there but holds no sdk/go.mod"; exit 1; }
 
+# Every target that uses .core checks it first, also a .core that was there
+# already (the marketplace builder clones CORE_COMMIT itself).
+core-sdk: $(CORE)/sdk/go.mod
+	@if [ -n "$(CORE_SHA)" ]; then \
+		got="$$(git -C $(CORE) rev-parse HEAD 2>/dev/null)"; \
+		if [ "$$got" != "$(CORE_SHA)" ]; then \
+			echo "$(CORE) is at '$$got', expected $(CORE_COMMIT) = $(CORE_SHA)"; exit 1; \
+		fi; \
+	fi
+
 # The core's typed client and the component library the bundle builds
 # against. Each is built once; delete its dist/ to build it again.
-$(CORE)/packages/typescript/dist/index.js: | $(CORE)/sdk/go.mod
+$(CORE)/packages/typescript/dist/index.js: | core-sdk
 	cd $(CORE)/packages/typescript && $(PNPM) install --frozen-lockfile && $(PNPM) run build
 
-$(CORE)/packages/svelte/dist/build/module.js: | $(CORE)/sdk/go.mod
+$(CORE)/packages/svelte/dist/build/module.js: | core-sdk
 	cd $(CORE)/packages/svelte && $(PNPM) install --frozen-lockfile && $(PNPM) run build
 
-core: $(CORE)/packages/typescript/dist/index.js $(CORE)/packages/svelte/dist/build/module.js
+core: core-sdk $(CORE)/packages/typescript/dist/index.js $(CORE)/packages/svelte/dist/build/module.js
 
 ui-build: core
 	cd ui && $(PNPM) install --frozen-lockfile && $(PNPM) run build
